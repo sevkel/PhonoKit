@@ -80,6 +80,7 @@ class PhononTransport:
 			("DebeyeModel", "DebeyeModel", "FiniteLattice2D"),
 			("DebeyeModel", "DebeyeModel", "Chain1D"),
 			("Ribbon2D", "Ribbon2D", "FiniteLattice2D"), #TODO: you can set it up to get a "2D" 1Dchain.
+			("Ribbon2D", "Ribbon2D", "Chain1D"),
 			("Chain1D", "Chain1D", "Chain1D"),
 			("InfiniteFourier2D", "InfiniteFourier2D", "FiniteLattice2D"),
 			("InfiniteFourier2D", "InfiniteFourier2D", "Chain1D")
@@ -87,6 +88,52 @@ class PhononTransport:
 			raise ValueError(f"Invalid combination of electrode type '{self.electrode_L.type}', '{self.electrode_R.type}' and scatter type '{self.scatter.type}'")
 
 		self.D = self.scatter.hessian #* top.atom_weight(self.M_C) * (const.eV2hartree / const.ang2bohr ** 2)
+		#TODO: Test
+		"""self.D = np.array([[100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                  [0, 100, 0, -100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                  [0, 0, 200, 0, 0, 0, -100, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                  [0, -100, 0, 200, 0, -100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                  [0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                  [0, 0, 0, -100, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                  [0, 0, -100, 0, 0, 0, 200, 0, -100, 0, 0, 0, 0, 0, 0, 0],
+                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                  [0, 0, 0, 0, 0, 0, -100, 0, 200, 0, 0, 0, -100, 0, 0, 0],
+                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0],
+                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, -100, 0, 0],
+                  [0, 0, 0, 0, 0, 0, 0, 0, -100, 0, 0, 0, 200, 0, 0, 0],
+                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100, 0, 200, 0, -100],
+                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0],
+                  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100, 0, 100]])"""
+                  
+		"""self.D = np.array([[100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 100, 0, -100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 200, 0, 0, 0, 0, 0, -100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, -100, 0, 200, 0, -100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, -100, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, -100, 0, 0, 0, 0, 0, 200, 0, 0, 0, 0, 0, -100, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, -100, 0, 0, 0, 0, 0, 200, 0, 0, 0, 0, 0, -100, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, -100, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100, 0, 0, 0, 0, 0, 200, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100, 0, 200, 0, -100],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100, 0, 100]
+                   ])"""
+  
+
+        
 		self.sigma_L, self.sigma_R = self.calculate_sigma()
 		self.g_CC_ret, self.g_CC_adv = self.calculate_G_cc()
 		self.T = self.calculate_transmission()
@@ -109,7 +156,7 @@ class PhononTransport:
 				return el.DebeyeModel(
 					self.w,
 					k_c = electrode_dict["k_x"],
-					w_D = self.E_D / const.h_bar
+					w_D = self.E_D #/ const.h_bar
 				)
 			
 			case "Chain1D":
@@ -221,10 +268,10 @@ class PhononTransport:
 			case ("DebeyeModel", "DebeyeModel"):
 				# Scalar Greens function
 				g_L = self.electrode_L.g
-				k_c_l = self.electrode_L.k_c * (1 / np.sqrt(top.atom_weight(self.M_C) * top.atom_weight(self.M_L)))
+				k_c_l = self.electrode_L.k_c #* (1 / np.sqrt(top.atom_weight(self.M_C) * top.atom_weight(self.M_L)))
 
 				g_R = self.electrode_R.g
-				k_c_r = self.electrode_R.k_c * (1 / np.sqrt(top.atom_weight(self.M_C) * top.atom_weight(self.M_R)))
+				k_c_r = self.electrode_R.k_c #* (1 / np.sqrt(top.atom_weight(self.M_C) * top.atom_weight(self.M_R)))
 
 			case ("Chain1D", "Chain1D"):
 				#1D Jan PhD Thesis p.21
@@ -310,8 +357,6 @@ class PhononTransport:
 								atomnr_scatter = int(1 + (N_y_R - N_y_scatter) / 2)
 								k_RC[j: j + direct_interaction_R.shape[0], 0: 0 + direct_interaction_R.shape[1]] = direct_interaction_R
 
-				#k_LC = self.electrode_L.k_lc_LL
-				#k_RC = self.electrode_R.k_lc_LL
 
 			case ("InfiniteFourier2D", "InfiniteFourier2D"):
 
@@ -468,22 +513,6 @@ class PhononTransport:
 		
 		return kappa
 
-	def plot_eigenchannels(self):
-		# top.write_plot_data(data_path + "/transmission_channels.dat", (T, T_val_tuple), "T (K), T_c")
-		fig, ax = plt.subplots()
-		for i in range(self.T_channel_vals.shape[1]):
-			ax.plot(self.E, self.T_channel_vals[:, i], label=i + 1, ls="--")
-		#ax.set_yscale('log')
-		ax.set_xlabel(r'Phonon Energy ($\mathrm{meV}$)', fontsize=12)
-		ax.set_ylabel(r'Transmission $\tau_{\mathrm{ph}}$', fontsize=12)
-		ax.axvline(self.w_D * const.unit2SI * const.h_bar / (const.meV2J), ls="--", color="black")
-		ax.axhline(1, ls="--", color="black")
-		ax.set_ylim(1E-4, 2)
-		plt.rc('xtick', labelsize=12)
-		plt.rc('ytick', labelsize=12)
-		plt.legend(fontsize=12)
-		plt.savefig(self.data_path + "/transport_channels.pdf", bbox_inches='tight')
-
 	def	plot_transport(self, write_data=True):
 		"""Writes out the raw data and plots the transport properties of the system."""
 
@@ -531,25 +560,6 @@ class PhononTransport:
 		plt.savefig(self.data_path + f"/PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_kc={self.scatter_dict["k_x"]}.pdf", bbox_inches='tight')
 		#plt.savefig(self.data_path + f"/debye.pdf", bbox_inches='tight')
 		plt.clf()
-
-	def tranport_calc(self):
-     
-		#self.calculate_G_cc()
-		#self.calculate_T()
-		#self.calc_kappa()
-		#self.plot_transport()
-  
-		if self.eigenchannel == True:
-      
-			self.plot_eigenchannels()
-			data = list([self.w])
-   
-			for j in range(0, self.channel_max):
-				data.append(self.T_channel_vals[:,j])
-			top.write_plot_data(self.data_path + "/phonon_trans_channel.dat", data, "T (K), kappa (pW/K)")
-
-		top.write_plot_data(self.data_path + "/phonon_trans.dat", (self.w, self.T), "w (sqrt(har/(bohr**2*u))), T_vals")
-		top.write_plot_data(self.data_path + "/kappa.dat", (self.temperature, self.kappa), "T (K), kappa (pW/K)")
 
 
 if __name__ == '__main__':
@@ -606,21 +616,25 @@ if __name__ == '__main__':
 
     # Initialize PhononTransort class object
     PT = PhononTransport(
-        data_path=data_path,
-        electrode_dict_L=electrode_dict_L,
-		electrode_dict_R=electrode_dict_R,
-        scatter_dict=scatter_dict,
-        E_D=E_D,
-        M_L=M_L,
-		M_R=M_R,
-        M_C=M_C,
-        N=N,
-        T_min=T_min,
-        T_max=T_max,
-        kappa_grid_points=kappa_grid_points
+        data_path = data_path,
+        electrode_dict_L = electrode_dict_L,
+		electrode_dict_R = electrode_dict_R,
+        scatter_dict = scatter_dict,
+        E_D = E_D,
+        M_L = M_L,
+		M_R = M_R,
+        M_C = M_C,
+        N = N,
+        T_min = T_min,
+        T_max = T_max,
+        kappa_grid_points = kappa_grid_points
     )
+    
+    if config["data_output"]["plot_transmission"]:
+        PT.plot_transport()
+        
     print("debug")
     
-    PT.plot_transport()
+    
 
     
