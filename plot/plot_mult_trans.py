@@ -18,7 +18,7 @@ prop = fm.FontProperties(fname='/hpc/gpfs2/scratch/u/kellerse/Masterarbeit/fonts
 plt.style.use(['science', 'notebook', 'no-latex'])
 
 # Ordnerpfad anpassen
-dest_fld = "/hpc/gpfs2/scratch/u/kellerse/Masterarbeit/Dev/phonon_transport/object_oriented/src/plot/Scatter_CH1D_Nx=2"
+dest_fld = r"C:\Users\sevke\Desktop\Dev\MA\phonokit\src\plot\Chain2Layer_eL=2y_Sc=2x2y_elR=2y\trans"
 ordner =  dest_fld + "/*.dat"
 
 
@@ -34,7 +34,7 @@ plots = []
 
 for datei in dateien:
     # kc-Wert extrahieren
-    match = re.search(r'kc=(\d+(?:\.\d+)?).dat', datei)
+    match = re.search(r'kc_xy=(\d+(?:\.\d+)?).dat', datei)
     if match:
         kc_wert = float(match.group(1))
     else:
@@ -52,7 +52,7 @@ plots.sort(key=lambda x: (x[0] is None, x[0]))
 
 # Alles plotten
 for kc_wert, frequenz, transmission in plots:
-    label = r"$k_\mathrm{c(x,y)}$ = " + f"{int(kc_wert / 9)}" + r"$\,\frac{\text{meV}^2}{Å^2}$" if kc_wert is not None else "kc unbekannt"
+    label = r"$k_\mathrm{c}^{\text{xy}}$ = " + f"{int(kc_wert / 9)}" + r"$\,\frac{\text{meV}^2}{Å^2}$" if kc_wert is not None else "kc unbekannt"
     ax.plot(frequenz, transmission, label=label, linewidth=1.3)
 
 # Achsen & Formatierungen

@@ -621,8 +621,8 @@ class FiniteLattice2D(Model):
 if __name__ == '__main__':
 
     #TODO: Doesn't work for interaction_range > N_x // 2 --> Fix this
-    junction2D = FiniteLattice2D(N_y=1, N_x=4, k_l_x=900, k_c_x=180, k_r_x=900, k_c_y=180, k_c_xy=0, k_l_xy=0, k_r_xy=0, interaction_range=1)
-    junction1D = Chain1D(interact_potential="reciproke_squared", interaction_range=1, lattice_constant=3.0, atom_type="Au", k_c=180, k_l=900, k_r=900, N=2)
+    junction2D = FiniteLattice2D(N_y=2, N_x=3, k_l_x=900, k_c_x=900, k_r_x=900, k_c_y=900, k_c_xy=0, k_l_xy=0, k_r_xy=0, interaction_range=2)
+    junction1D = Chain1D(interact_potential="reciproke_squared", interaction_range=1, lattice_constant=3.0, atom_type="Au", k_c=900, k_l=900, k_r=900, N=2)
     print('debugging')
 
 

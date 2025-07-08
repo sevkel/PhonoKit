@@ -10,11 +10,9 @@ import tmoutproc as top
 matplotlib.use('agg')
 from matplotlib import pyplot as plt
 from scipy.integrate import quad
-from scipy.integrate import simps
-import ray
+from scipy.integrate import simpson
 from utils import constants
 
-from utils import constants
 
 class Electrode:
     """
@@ -64,9 +62,28 @@ class DebeyeModel(Electrode):
         self.w_D = w_D
 
         self.g0 = self.calculate_g0(w, w_D)
-        self.g = self.calculate_g(self.g0)
+        self.g = self.calculate_g(self.g0)[0]
+        self.dos, self.dos_real = self.calculate_g(self.g0)[1], self.calculate_g(self.g0)[2]
 
         assert isinstance(self.k_c, (int, float)), "In the Debeye model k_c must be a single numeric value (int or float), not an array."
+        
+    def ranged_force_constant(self):
+        """
+        Calculate ranged force constants for the 1D chain dependend on which potential is used and on how many neighbors are coupled.
+        
+        Retruns:
+            range_force_constant (list of tuples): Ranged force constant for the 2D lattice
+        """
+
+        match self.interact_potential:
+
+            case "reciproke_squared":
+                all_k_c = list(enumerate((self.k_c * (1 / (i * self.lattice_constant)**2) for i in range(1, self.interaction_range + 1))))
+            
+            case _:
+                raise ValueError("Invalid interaction potential. Choose either 'reciproke_squared', .")
+            
+        return all_k_c
 
     def calculate_g0(self, w, w_D):
         """Calculates surface greens function according to Markussen, T. (2013). Phonon interference effects in molecular junctions. The Journal of chemical physics, 139(24), 244101 (https://doi.org/10.1063/1.4849178).
@@ -108,8 +125,10 @@ class DebeyeModel(Electrode):
         """
         #TODO: Vorzeichen check
         g = g_0 / (1 + self.k_c * g_0)
-
-        return g
+        dos = (-1 / np.pi) * np.imag(g_0)
+        dos_real = np.real(g_0)
+        
+        return g, dos, dos_real
 
 class Chain1D(Electrode):
     """
@@ -123,6 +142,7 @@ class Chain1D(Electrode):
         
         self.g0 = self.calculate_g0()
         self.g = self.calculate_g(self.g0)
+        self.dos, self.dos_real = self.calculate_g(self.g0)[1], self.calculate_g(self.g0)[2]
         
 
     def ranged_force_constant(self):
@@ -175,8 +195,11 @@ class Chain1D(Electrode):
 
         #TODO: Vorzeichen checken
         g = g0 / (1 + k_c * g0)
+        
+        dos = (-1 / np.pi) * np.imag(g)
+        dos_real = np.real(g)
 
-        return g
+        return g, dos, dos_real
     
 class Ribbon2D(Electrode):
     """
@@ -197,6 +220,7 @@ class Ribbon2D(Electrode):
         self.eps = 1E-50
         self.g0, self.H_01 = self.calculate_g0() #H_01 only needed if N_y == N_y_scatter
         self.g = self.calculate_g(self.g0, self.H_01)[0]
+        self.dos, self.dos_real = self.calculate_g(self.g0, self.H_01)[3], self.calculate_g(self.g0, self.H_01)[4]
         self.k_lc_LL = self.calculate_g(self.g0, self.H_01)[1]
         self.direct_interaction = self.calculate_g(self.g0, self.H_01)[2]
 
@@ -241,7 +265,7 @@ class Ribbon2D(Electrode):
             """
             Build up an actual bulk layer of the electrode. The coupling includes options for x, y and xy coupling. The coupling range is defined by the parameter interaction_range.
             """
-
+            #TODO: Hier Sachen auskommentiert
             N_y = self.N_y
             interaction_range = self.interaction_range
 
@@ -257,13 +281,22 @@ class Ribbon2D(Electrode):
                     # diagonal elements x and xy coupling
                     if j % 2 == 0:
                         
+                        atomnr = np.ceil(float(j + 1) / 2)
+                        
                         # ii-coupling
                         hNN[j, j] = sum(2 * all_k_x[k][1] for k in range(len(all_k_x))) 
+            
+
+                        for k in range(interaction_range):
+                            if j + 2 * (k + 1) * N_y < hNN.shape[0]:                    
+                                hNN[j, j + 2 * (k + 1) * N_y] = -all_k_x[k][1]
+                            if j - 2 * (k + 1) * N_y >= 0:
+                                hNN[j, j - 2 * (k + 1) * N_y] = -all_k_x[k][1]
 
                         # ij-coupling in h01
 
                         # xy-coupling
-                        if j == 0 + i * 2 * N_y or j == i * 2 * N_y + 2 * N_y - 2:
+                        if j == i * 2 * N_y or j == i * 2 * N_y + 2 * N_y - 2:
                             hNN[j, j + 1] = 2 * all_k_xy[0][1]
                             hNN[j + 1, j] = 2 * all_k_xy[0][1]
 
@@ -280,17 +313,18 @@ class Ribbon2D(Electrode):
                                 # xy-coupling
                                 atomnr = np.ceil(float(j) / 2)
 
-                                if atomnr < N_y and interaction_range > 1:#0 <= int(j - 1 + 2 * (atomnr + N_y + 1) - 1) < hNN.shape[1]:
-                                    hNN[j - 1, int(j - 1 + 2 * (atomnr + N_y + 1) - 1)] = -all_k_xy[0][1]
-                                    hNN[j, int(j - 1 + 2 * (atomnr + N_y + 1) - 2)] = -all_k_xy[0][1]
+                                if interaction_range > 1:
+                                    if atomnr < N_y:# and interaction_range > 1:
+                                        hNN[j - 1, int(j - 1 + 2 * (atomnr + N_y + 1) - 1)] = -all_k_xy[0][1]
+                                        hNN[j, int(j - 1 + 2 * (atomnr + N_y + 1) - 2)] = -all_k_xy[0][1]
 
-                                elif atomnr ==  N_y and interaction_range > 1:
-                                    hNN[j - 1, int(2 * (atomnr + N_y - 1) - 1)] = -all_k_xy[0][1]
-                                    hNN[j, int(2 * (atomnr + N_y - 1) - 2)] = -all_k_xy[0][1]
+                                    elif atomnr ==  N_y and interaction_range > 1:
+                                        hNN[j - 1, int(2 * (atomnr + N_y - 1) - 1)] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr + N_y - 1) - 2)] = -all_k_xy[0][1]
 
-                                elif atomnr > N_y and interaction_range > 1:
-                                    hNN[j, int(j - 1 - 2 * (atomnr - N_y + 1))] = -all_k_xy[0][1]
-                                    hNN[j - 1, int(j - 1 - 2 * (atomnr - N_y + 1) + 1)] = -all_k_xy[0][1]
+                                    elif atomnr > N_y and interaction_range > 1:
+                                        hNN[j, int(j - 1 - 2 * (atomnr - N_y + 1))] = -all_k_xy[0][1]
+                                        hNN[j - 1, int(j - 1 - 2 * (atomnr - N_y + 1) + 1)] = -all_k_xy[0][1]
 
 
                                 hNN[j, j] = all_k_y[0][1]
@@ -325,42 +359,43 @@ class Ribbon2D(Electrode):
                                 hNN[j, j] = 2 * all_k_y[0][1]
                                 
                                 # xy-coupling inner atom
-                                if atomnr < N_y and interaction_range > 1:
-                                    ## first layer
-                                    # first atom
-                                    hNN[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
-                                    hNN[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
+                                if interaction_range > 1:
+                                    if atomnr < N_y:# and interaction_range > 1:
+                                        ## first layer
+                                        # first atom
+                                        hNN[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
 
-                                    #second atom
-                                    hNN[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
-                                    hNN[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
+                                        #second atom
+                                        hNN[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
 
-                                elif atomnr > i * N_y and (i + 1) * N_y == N_y * interaction_range:
-                                    ## last layer
-                                    # first atom
-                                    hNN[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
-                                    hNN[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
+                                    elif atomnr > i * N_y and (i + 1) * N_y == N_y * interaction_range:
+                                        ## last layer
+                                        # first atom
+                                        hNN[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
 
-                                    # second atom
-                                    hNN[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
-                                    hNN[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
-                                
-                                elif atomnr > i * N_y and atomnr < (i + 1) * N_y and (i + 1) * N_y < N_y * interaction_range:
-                                    ## layer before
-                                    # first atom
-                                    hNN[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
-                                    hNN[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
-                                    # second atom
-                                    hNN[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
-                                    hNN[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
+                                        # second atom
+                                        hNN[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
+                                    
+                                    elif atomnr > i * N_y and atomnr < (i + 1) * N_y and (i + 1) * N_y < N_y * interaction_range:
+                                        ## layer before
+                                        # first atom
+                                        hNN[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
+                                        # second atom
+                                        hNN[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
 
-                                    ## layer after
-                                    # first atom
-                                    hNN[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
-                                    hNN[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
-                                    # second atom
-                                    hNN[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
-                                    hNN[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
+                                        ## layer after
+                                        # first atom
+                                        hNN[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
+                                        # second atom
+                                        hNN[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
 
                                     
 
@@ -442,14 +477,14 @@ class Ribbon2D(Electrode):
                                     h00[j, j] += 2 * all_k_x[k][1]
                                 else:
                                     h00[j, j] += all_k_x[k][1]
-
+                                    
                         for k in range(interaction_range):
                             if j + 2 * (k + 1) * N_y < h00.shape[0]:                    
                                 h00[j, j + 2 * (k + 1) * N_y] = -all_k_x[k][1]
                             if j - 2 * (k + 1) * N_y >= 0:
                                 h00[j, j - 2 * (k + 1) * N_y] = -all_k_x[k][1]
 
-                        # xy-coupling
+                        # xy-coupling # TODO: do something to take account that only for Ny > 1 possible or leave it to the user?
                         if j == 0 or j == 2 * N_y - 2:
                             h00[j, j + 1] = all_k_xy[0][1]
                             h00[j + 1, j] = all_k_xy[0][1]
@@ -470,24 +505,25 @@ class Ribbon2D(Electrode):
                     else:
                         
                         if N_y > 1:
-                            # y coupling in the coupling range -> edge layers
+                            # y coupling in the coupling range -> edge layers/atoms
                             if (j == i * 2 * N_y + 1) or (j == i * 2 * N_y + 2 * N_y - 1): 
                                 
                                 # xy-coupling
                                 atomnr = np.ceil(float(j) / 2)
 
-                                if atomnr < N_y and interaction_range > 1:
-                                    print(atomnr, j)
-                                    h00[j - 1, int(j - 1 + 2 * (atomnr + N_y + 1) - 1)] = -all_k_xy[0][1]
-                                    h00[j, int(j - 1 + 2 * (atomnr + N_y + 1) - 2)] = -all_k_xy[0][1]
+                                if interaction_range > 1:
+                                    
+                                    if atomnr < N_y: #and interaction_range > 1:
+                                        h00[j - 1, int(j - 1 + 2 * (atomnr + N_y + 1) - 1)] = -all_k_xy[0][1]
+                                        h00[j, int(j - 1 + 2 * (atomnr + N_y + 1) - 2)] = -all_k_xy[0][1]
 
-                                elif atomnr ==  N_y and interaction_range > 1:
-                                    h00[j - 1, int(2 * (atomnr + N_y - 1) - 1)] = -all_k_xy[0][1]
-                                    h00[j, int(2 * (atomnr + N_y - 1) - 2)] = -all_k_xy[0][1]
+                                    elif atomnr ==  N_y and interaction_range > 1:
+                                        h00[j - 1, int(2 * (atomnr + N_y - 1) - 1)] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr + N_y - 1) - 2)] = -all_k_xy[0][1]
 
-                                elif atomnr > N_y and interaction_range > 1:
-                                    h00[j, int(j - 1 - 2 * (atomnr - N_y + 1))] = -all_k_xy[0][1]
-                                    h00[j - 1, int(j - 1 - 2 * (atomnr - N_y + 1) + 1)] = -all_k_xy[0][1]
+                                    elif atomnr > N_y and interaction_range > 1:
+                                        h00[j, int(j - 1 - 2 * (atomnr - N_y + 1))] = -all_k_xy[0][1]
+                                        h00[j - 1, int(j - 1 - 2 * (atomnr - N_y + 1) + 1)] = -all_k_xy[0][1]
                                 
 
 
@@ -523,42 +559,44 @@ class Ribbon2D(Electrode):
                                 h00[j, j] = 2 * all_k_y[0][1]
                                 
                                 # xy-coupling inner atom
-                                if atomnr < N_y and interaction_range > 1:
-                                    ## first layer
-                                    # first atom
-                                    h00[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
-                                    h00[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
+                                if interaction_range > 1:
+                                    
+                                    if atomnr < N_y: #and interaction_range > 1:
+                                        ## first layer
+                                        # first atom
+                                        h00[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
 
-                                    #second atom
-                                    h00[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
-                                    h00[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
+                                        #second atom
+                                        h00[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
 
-                                elif atomnr > i * N_y and (i + 1) * N_y == N_y * interaction_range:
-                                    ## last layer
-                                    # first atom
-                                    h00[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
-                                    h00[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
+                                    elif atomnr > i * N_y and (i + 1) * N_y == N_y * interaction_range:
+                                        ## last layer
+                                        # first atom
+                                        h00[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
 
-                                    # second atom
-                                    h00[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
-                                    h00[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
-                                
-                                elif atomnr > i * N_y and atomnr < (i + 1) * N_y and (i + 1) * N_y < N_y * interaction_range:
-                                    ## layer before
-                                    # first atom
-                                    h00[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
-                                    h00[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
-                                    # second atom
-                                    h00[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
-                                    h00[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
+                                        # second atom
+                                        h00[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
+                                    
+                                    elif atomnr > i * N_y and atomnr < (i + 1) * N_y and (i + 1) * N_y < N_y * interaction_range:
+                                        ## layer before
+                                        # first atom
+                                        h00[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
+                                        # second atom
+                                        h00[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
 
-                                    ## layer after
-                                    # first atom
-                                    h00[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
-                                    h00[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
-                                    # second atom
-                                    h00[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
-                                    h00[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
+                                        ## layer after
+                                        # first atom
+                                        h00[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
+                                        # second atom
+                                        h00[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
 
                                     
 
@@ -607,32 +645,55 @@ class Ribbon2D(Electrode):
             h01 = np.zeros((2 * N_y * interaction_range, 2 * N_y * interaction_range))
             # build Hessian matrix for the h01 interaction between principal layers
             # rows are A layer atoms, columns are B layer atoms
-
-            for k in range(N_y):
-                # direct x coupling
-                h01[2 * (interaction_range * N_y - k) - 2, 2 * (N_y - k) - 2] = -all_k_x[0][1]
-
-                #direct xy coupling
-                h01[2 * (interaction_range * N_y - k) - 2, 2 * k + 1] = -all_k_xy[0][1]
-                h01[2 * (interaction_range * N_y - k) - 1, 2 * k] = -all_k_xy[0][1]
-
-            for i in range(0, h01.shape[0], 2):
-                
-                h01[i, i] = -all_k_x[-1][1]
-                atomnr = np.ceil(float(i + 1) / 2)
-
-                for k in range(1, interaction_range):
-
-                    if 2 * k * N_y - 2 < i < 2 * (k + 1) * N_y - 2:
-                        h01[i, i - 2 * k * N_y] = -all_k_x[-1-k][1]
-
-                #check in which layer the atom is
-                for k in range(1, interaction_range + 1):
-                    if (k - 1) * N_y < atomnr <= k * N_y:
-
-                        for h in range(1, k):
-                            h01[i, i - 2 * h * N_y] = -all_k_x[-1-h][1]
             
+            for i in range(h01.shape[0]):
+                for j in range(h01.shape[1]):
+                    if i % 2 == 0 and j % 2 == 0:
+                        atomnr_lay1 = np.ceil(float(i + 1) / 2)
+                        atomnr_lay2 = np.ceil(float(j + 1) / 2)
+                        
+                        if atomnr_lay1 == atomnr_lay2:
+                            h01[i, j] = -all_k_x[-1][1]
+                        
+                        if interaction_range > 1:
+                            # for more than next nearest neighbour coupling in x-direction
+                            for r in range(interaction_range - 1, -1, -1):
+                                
+                                if atomnr_lay2 == atomnr_lay1 - r * N_y:
+                                    h01[i, j] = -all_k_x[-(r + 1)][1]
+                            
+                            # xy coupling
+                            if (interaction_range - 1) * N_y < atomnr_lay1 <= interaction_range * N_y and atomnr_lay2 <= N_y:
+                                # edge atoms
+                                if atomnr_lay1 == (interaction_range - 1) * N_y + 1 and atomnr_lay2 == 2:
+                                    h01[i, j + 1] = -all_k_xy[0][1]
+                                    h01[i + 1, j] = -all_k_xy[0][1]
+                                
+                                elif atomnr_lay1 == interaction_range * N_y and atomnr_lay2 == N_y - 1:
+                                    h01[i, j + 1] = -all_k_xy[0][1]
+                                    h01[i + 1, j] = -all_k_xy[0][1]
+                                
+                                # middle atoms
+                                elif atomnr_lay2 == atomnr_lay1 - (interaction_range - 1) * N_y + 1 or atomnr_lay2 == atomnr_lay1 - (interaction_range - 1) * N_y - 1:
+                                    h01[i, j + 1] = -all_k_xy[0][1]
+                                    h01[i + 1, j] = -all_k_xy[0][1]
+                         
+                        else:
+                            # edge atoms
+                            if atomnr_lay1 == 1 and atomnr_lay2 == 2:
+                                h01[i, j + 1] = -all_k_xy[0][1]
+                                h01[i + 1, j] = -all_k_xy[0][1]
+                            elif atomnr_lay1 == N_y and atomnr_lay2 == N_y - 1:
+                                h01[i, j + 1] = -all_k_xy[0][1]
+                                h01[i + 1, j] = -all_k_xy[0][1]
+                            elif atomnr_lay2 == atomnr_lay1 - 1 or atomnr_lay2 == atomnr_lay1 + 1:
+                                h01[i, j + 1] = -all_k_xy[0][1]
+                                h01[i + 1, j] = -all_k_xy[0][1]
+                            
+                            # make matrix now symmetric
+                            h01[j, i] = h01[i, j]        
+                                                        
+
             return h01
                     
 
@@ -645,7 +706,7 @@ class Ribbon2D(Electrode):
         # Start decimation algorithm
 
         def calc_g0_w(w):
-            w = np.identity(H_NN.shape[0]) * (w**2 + (1.j * 1E-24))
+            w = np.identity(H_NN.shape[0]) * (w**2 + (1.j * 1E-10))  # add small imaginary part to avoid singularities
             g = np.linalg.inv(w - H_NN) 
             alpha_i = np.dot(np.dot(H_01, g), H_01)
             beta_i = np.dot(np.dot(H_01_dagger, g), H_01_dagger)
@@ -674,7 +735,10 @@ class Ribbon2D(Electrode):
             if delta >= self.eps or terminated:
                 print("Warning! Decimation algorithm did not converge. Delta: ", delta)
 
-            g_0 = np.linalg.inv(w - epsilon_is)
+            try:
+                g_0 = np.linalg.inv(w - epsilon_is)
+            except np.linalg.LinAlgError:
+                g_0 = np.linalg.pinv(w - epsilon_is)
         
             return g_0
 
@@ -730,27 +794,62 @@ class Ribbon2D(Electrode):
         
         else:
             k_lc_LL = np.zeros((2 * N_y * interaction_range, 2 * N_y * interaction_range), dtype=float) 
-
+            
+            interaction_layers_dict = dict()
+            
             for i in range(interaction_range):
-                for j in range(i * 2 * N_y, i * 2 * N_y + 2 * N_y, 2):
-                    if j % 2 == 0:
-                        atomnr = np.ceil(float(j + 1) / 2)
-
-                        if i * N_y + 1 + (N_y - N_y_scatter) / 2 <= atomnr <= i * N_y + N_y - (N_y - N_y_scatter) / 2:
-                            k_lc_LL[j, j] = -all_k_c_x[-1][1]
-
-                        if i == interaction_range - 1 and atomnr == i * N_y +  (N_y - N_y_scatter) / 2:
-
-                            atomnr_b = int(1 + (N_y - N_y_scatter) / 2)
-                            k_lc_LL[j: j + direct_interaction.shape[0], atomnr_b: atomnr_b + direct_interaction.shape[1]] = direct_interaction
-
+                
+                interaction_layer = np.zeros((2 * N_y, 2 * N_y), dtype=float)
+                
+                if i == 0: # direct NN layer
+                    for j in range(interaction_layer.shape[0]):
+                        
+                        if j % 2 == 0:
+                            atomnr = np.ceil(float(j + 1) / 2)
+                            
+                            if atomnr == ((N_y - N_y_scatter) // 2) or atomnr == ((N_y - N_y_scatter) // 2) + N_y_scatter + 1:
+                                interaction_layer[j, j + 1] = -all_k_c_xy[0][1]
+                                interaction_layer[j + 1, j] = -all_k_c_xy[0][1]
+                            
+                            elif ((N_y - N_y_scatter) // 2) < atomnr < ((N_y - N_y_scatter) // 2) + N_y_scatter + 1:
+                                
+                                interaction_layer[j, j] = -sum(all_k_c_x[k][1] for k in range(i, interaction_range))
+                                
+                                if (atomnr == ((N_y - N_y_scatter) // 2) + 1 or atomnr == ((N_y - N_y_scatter) // 2) + N_y_scatter) and N_y_scatter > 1:
+                                    interaction_layer[j, j + 1] = -all_k_c_xy[0][1]
+                                    interaction_layer[j + 1, j] = -all_k_c_xy[0][1]
+                                elif N_y_scatter > 1:
+                                    interaction_layer[j, j + 1] = -2 * all_k_c_xy[0][1]
+                                    interaction_layer[j + 1, j] = -2 * all_k_c_xy[0][1]
+                    
+                    interaction_layers_dict[i] = interaction_layer       
+                              
+                else:
+                    
+                    for j in range(interaction_layer.shape[0]):
+                        if j % 2 == 0:
+                            if (N_y - N_y_scatter // 2) < atomnr < (N_y - N_y_scatter // 2) + N_y_scatter + 1:
+                                k_lc_LL[j, j] = -sum(all_k_c_x[k][1] for k in range(i, interaction_range))
+                    
+                    interaction_layers_dict[i] = interaction_layer
+                    
+                
+                        
+            for l in range(interaction_range):
+                k_lc_LL[l * interaction_layers_dict[l].shape[0]: l * interaction_layers_dict[l].shape[0] + interaction_layers_dict[l].shape[0], \
+                    l * interaction_layers_dict[l].shape[0]: l * interaction_layers_dict[l].shape[0] + interaction_layers_dict[l].shape[0]] = interaction_layers_dict[l]
+               
 
                     
+
         #g = map(lambda x: np.dot(x, np.linalg.inv(np.identity(x.shape[0]) + np.dot(k_lc_LL, x))), g_0)
         g = map(lambda x: np.dot(np.linalg.inv(np.identity(x.shape[0]) + np.dot(x, k_lc_LL)), x), g_0)
         g = np.array([item for item in g])
         
-        return g, k_lc_LL, direct_interaction
+        dos = (-1 / np.pi) * np.imag(np.trace(g, axis1=1, axis2=2))
+        dos_real = np.real(np.trace(g, axis1=1, axis2=2))
+        
+        return g, k_lc_LL, direct_interaction, dos, dos_real
 
 class InfiniteFourier2D(Electrode):
     """
@@ -771,8 +870,7 @@ class InfiniteFourier2D(Electrode):
         self.N_y_scatter = N_y_scatter
         self.g0 = self.calculate_g0()
         self.g = self.calculate_g()[0]
-        self.k_lc_LL = self.calculate_g()[1]
-        
+        self.k_lc_LL, self.dos, self.dos_real = self.calculate_g()[1], self.calculate_g()[2], self.calculate_g()[3]
 
     def ranged_force_constant(self):
         """
@@ -828,7 +926,7 @@ class InfiniteFourier2D(Electrode):
             
             g0_q_vals = np.array([g0_q(q_val, w) for q_val in self.q])
             
-            g0 = (1 / (2 * np.pi)) * simps(g0_q_vals, self.q)
+            g0 = (1 / (2 * np.pi)) * simpson(g0_q_vals, self.q)
 
             return g0
     
@@ -886,8 +984,11 @@ class InfiniteFourier2D(Electrode):
 
         g = map(lambda x: np.dot(x * g0_template, np.linalg.inv(np.identity(g0_template.shape[0]) + np.dot(k_lc_LL, x * g0_template))), self.g0)
         g = np.array([item for item in g])
+        
+        dos = (-1 / np.pi) * np.imag(g)
+        dos_real = np.real(g)
 
-        return g, k_lc_LL
+        return g, k_lc_LL, dos, dos_real
 
 
 
@@ -906,7 +1007,7 @@ if __name__ == '__main__':
 
     electrode_debeye = DebeyeModel(w, k_c, w_D)
     electrode_chain1d = Chain1D(w, interaction_range=2, interact_potential='reciproke_squared', atom_type="Au", lattice_constant=3.0, k_x=0.1, k_c=0.1)
-    electrode_2dribbon = Ribbon2D(w, interaction_range=1, interact_potential='reciproke_squared', atom_type="Au", lattice_constant=3.0, N_y=1, N_y_scatter=1, M_L=1, M_C=1, k_x=900, k_y=900, k_xy=0, k_c=900, k_c_xy=0)
+    electrode_2dribbon = Ribbon2D(w, interaction_range=2, interact_potential='reciproke_squared', atom_type="Au", lattice_constant=3.0, N_y=3, N_y_scatter=1, M_L=1, M_C=1, k_x=900, k_y=900, k_xy=180, k_c=900, k_c_xy=180)
     electrode_infinite = InfiniteFourier2D(w, interaction_range=1, interact_potential='reciproke_squared', atom_type="Au", lattice_constant=3.0, N_q=100, N_y_scatter=1, k_x=180, k_y=180, k_xy=0, k_c=180, k_c_xy=0)
 
     print("debug")

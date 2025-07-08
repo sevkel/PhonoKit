@@ -2,7 +2,7 @@
     
     "CALCULATION": {
 
-        "data_path": "C://Users//sevke//Desktop//Dev//MA//phonokit//plot",
+        "data_path": "C:/Users/sevke/Desktop/Dev/MA/phonokit/src/plot/Chain3Layer_eL=3y_Sc=2x3y_elR=3y",
 
         "M_L": "Au",
         "M_R": "Au",
@@ -19,7 +19,7 @@
 
         "DebeyeModel": {
             "enabled": false,
-            "k_x": 900,
+            "k_x": 100,
             "k_xy": 0
         },
 
@@ -39,9 +39,9 @@
             "N_y": 3,
             "k_x": 900,
             "k_y": 900,
-            "k_xy": 180,
+            "k_xy": 900,
             "k_c": 900,
-            "k_c_xy": 180,
+            "k_c_xy": 900,
             "interaction_range": 1,
             "interact_potential": "reciproke_squared",
             "atom_type": "Au",
@@ -67,7 +67,7 @@
 
         "DebeyeModel": {
             "enabled": false,
-            "k_x": 900,
+            "k_x": 100,
             "k_xy": 0
         },
 
@@ -88,9 +88,9 @@
             "N_y": 3,
             "k_x": 900,
             "k_y": 900,
-            "k_xy": 180,
+            "k_xy": 900,
             "k_c": 900,
-            "k_c_xy": 180,
+            "k_c_xy": 900,
             "interaction_range": 1,
             "interact_potential": "reciproke_squared",
             "atom_type": "Au",
@@ -126,11 +126,11 @@
 
         "FiniteLattice2D": {
             "enabled": true,
-            "N_y": 1,
+            "N_y": 3,
             "N_x": 2,
             "k_x": 900,
             "k_y": 900,
-            "k_xy": 180,
+            "k_xy": 900,
             "lattice_constant": 3.0,
             "interaction_range": 1,
             "interact_potential": "reciproke_squared",

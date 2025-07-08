@@ -2,7 +2,7 @@
     
     "CALCULATION": {
 
-        "data_path": "C://Users//sevke//Desktop//Dev//MA//phonokit//plot",
+        "data_path": "C:/Users/sevke/Desktop/Dev/MA/phonokit/src/plot/Chain1D_Debye_vs_decimation_Nchain=2",
 
         "M_L": "Au",
         "M_R": "Au",
@@ -18,8 +18,8 @@
     "ELECTRODE_L": {
 
         "DebeyeModel": {
-            "enabled": false,
-            "k_x": 900,
+            "enabled": true,
+            "k_x": 100,
             "k_xy": 0
         },
 
@@ -34,14 +34,14 @@
         },
 
         "Ribbon2D": {
-            "enabled": true,
+            "enabled": false,
             "N": 750,
-            "N_y": 3,
+            "N_y": 1,
             "k_x": 900,
             "k_y": 900,
-            "k_xy": 180,
+            "k_xy": 0,
             "k_c": 900,
-            "k_c_xy": 180,
+            "k_c_xy": 0,
             "interaction_range": 1,
             "interact_potential": "reciproke_squared",
             "atom_type": "Au",
@@ -66,8 +66,8 @@
         "ELECTRODE_R": {
 
         "DebeyeModel": {
-            "enabled": false,
-            "k_x": 900,
+            "enabled": true,
+            "k_x": 100,
             "k_xy": 0
         },
 
@@ -83,14 +83,14 @@
         },
         
         "Ribbon2D": {
-            "enabled": true,
+            "enabled": false,
             "N": 750,
-            "N_y": 3,
+            "N_y": 1,
             "k_x": 900,
             "k_y": 900,
-            "k_xy": 180,
+            "k_xy": 0,
             "k_c": 900,
-            "k_c_xy": 180,
+            "k_c_xy": 0,
             "interaction_range": 1,
             "interact_potential": "reciproke_squared",
             "atom_type": "Au",
@@ -115,9 +115,9 @@
     "SCATTER": {
 
         "Chain1D": {
-            "enabled": false,
-            "N": 2,
-            "k_x": 900,
+            "enabled": true,
+            "N": 3,
+            "k_x": 300,
             "lattice_constant": 3.0,
             "interaction_range": 1,
             "interact_potential": "reciproke_squared",
@@ -125,12 +125,12 @@
         },  
 
         "FiniteLattice2D": {
-            "enabled": true,
+            "enabled": false,
             "N_y": 1,
             "N_x": 2,
-            "k_x": 900,
-            "k_y": 900,
-            "k_xy": 180,
+            "k_x": 600,
+            "k_y": 600,
+            "k_xy": 0,
             "lattice_constant": 3.0,
             "interaction_range": 1,
             "interact_potential": "reciproke_squared",

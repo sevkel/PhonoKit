@@ -1,0 +1,7 @@
+{                                         
+  "workbench.colorCustomizations": {
+    "tree.indentGuidesStroke": "#e2bdbd"
+  },
+  "workbench.editor.enablePreviewFromQuickOpen": false,
+  "workbench.editor.enablePreviewFromCodeNavigation": false
+}

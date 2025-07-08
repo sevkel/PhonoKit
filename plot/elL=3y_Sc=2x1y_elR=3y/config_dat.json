@@ -2,7 +2,7 @@
     
     "CALCULATION": {
 
-        "data_path": "C://Users//sevke//Desktop//Dev//MA//phonokit//plot",
+        "data_path": "C:/Users/sevke/Desktop/Dev/MA/phonokit/src/plot/elL=3y_Sc=2x1y_elR=3y",
 
         "M_L": "Au",
         "M_R": "Au",
@@ -19,7 +19,8 @@
 
         "DebeyeModel": {
             "enabled": false,
-            "k_x": 900,
+            "E_D": 80,
+            "k_x": 100,
             "k_xy": 0
         },
 
@@ -67,7 +68,8 @@
 
         "DebeyeModel": {
             "enabled": false,
-            "k_x": 900,
+            "E_D": 80,
+            "k_x": 100,
             "k_xy": 0
         },
 
