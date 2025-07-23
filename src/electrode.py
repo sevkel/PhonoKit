@@ -16,15 +16,17 @@ from utils import constants
 
 class Electrode:
     """
-    Motherclass for the definition of different electrode models. The class contains the greens function g0 and g, which are calculated.
+    Motherclass for the definition of different electrode models. The class contains the greens function g0 and g, which are calculated. By default, calculate left electrode.
     """
 
-    def __init__(self, w, interaction_range=1, interact_potential="reciproke_squared", atom_type="Au", lattice_constant=3.0):
+    def __init__(self, w, interaction_range=1, interact_potential="reciproke_squared", atom_type="Au", lattice_constant=3.0, left=True, right=False):
         self.w = w
         self.interaction_range = interaction_range
         self.interact_potential = interact_potential
         self.atom_type = atom_type
         self.lattice_constant = lattice_constant
+        self.left = left
+        self.right = right
 
     def plot_g0(self):
         fig, ax1 = plt.subplots()
@@ -174,7 +176,7 @@ class Chain1D(Electrode):
         Returns:
             g0 (array_like): Surface greens function g0
         """
-
+        #TODO: is this really correct by summing k_x and k_c in that way?
         all_k_x = self.ranged_force_constant()[0]
         k_x = sum(k_x for _, k_x in all_k_x)
 
@@ -192,12 +194,11 @@ class Chain1D(Electrode):
 
         # because interaction takes the whole range
         k_c = sum(k_c for _, k_c in all_k_c)
-
-        #TODO: Vorzeichen checken
+        
         g = g0 / (1 + k_c * g0)
         
-        dos = (-1 / np.pi) * np.imag(g)
-        dos_real = np.real(g)
+        dos = (-1 / np.pi) * np.imag(g0)
+        dos_real = np.real(g0)
 
         return g, dos, dos_real
     
@@ -206,8 +207,8 @@ class Ribbon2D(Electrode):
     Class for the definition of a two-dimensional ribbon. Inherits from the Electrode class.
     """
 
-    def __init__(self, w, interaction_range, interact_potential, atom_type, lattice_constant, N_y, N_y_scatter, M_L, M_C, k_x, k_y, k_xy, k_c, k_c_xy): 
-        super().__init__(w, interaction_range, interact_potential, atom_type, lattice_constant)
+    def __init__(self, w, interaction_range, interact_potential, atom_type, lattice_constant, left, right, N_y, N_y_scatter, M_L, M_C, k_x, k_y, k_xy, k_c, k_c_xy): 
+        super().__init__(w, interaction_range, interact_potential, atom_type, lattice_constant, left, right)
         self.N_y = N_y
         self.N_y_scatter = N_y_scatter
         self.k_x = k_x * 1#(constants.eV2hartree / constants.ang2bohr ** 2)
@@ -296,13 +297,15 @@ class Ribbon2D(Electrode):
                         # ij-coupling in h01
 
                         # xy-coupling
-                        if j == i * 2 * N_y or j == i * 2 * N_y + 2 * N_y - 2:
-                            hNN[j, j + 1] = 2 * all_k_xy[0][1]
-                            hNN[j + 1, j] = 2 * all_k_xy[0][1]
+                        if N_y > 1:
+                            
+                            if j == i * 2 * N_y or j == i * 2 * N_y + 2 * N_y - 2:
+                                hNN[j, j + 1] = 2 * all_k_xy[0][1]
+                                hNN[j + 1, j] = 2 * all_k_xy[0][1]
 
-                        if j != 0 + i * 2 * N_y and j != i * 2 * N_y + 2 * N_y - 2 and N_y > 2:
-                            hNN[j, j + 1] = 4 * all_k_xy[0][1]
-                            hNN[j + 1, j] = 4 * all_k_xy[0][1]
+                            if j != 0 + i * 2 * N_y and j != i * 2 * N_y + 2 * N_y - 2 and N_y > 2:
+                                hNN[j, j + 1] = 4 * all_k_xy[0][1]
+                                hNN[j + 1, j] = 4 * all_k_xy[0][1]
                         
 
                     else:
@@ -314,6 +317,7 @@ class Ribbon2D(Electrode):
                                 atomnr = np.ceil(float(j) / 2)
 
                                 if interaction_range > 1:
+                                    
                                     if atomnr < N_y:# and interaction_range > 1:
                                         hNN[j - 1, int(j - 1 + 2 * (atomnr + N_y + 1) - 1)] = -all_k_xy[0][1]
                                         hNN[j, int(j - 1 + 2 * (atomnr + N_y + 1) - 2)] = -all_k_xy[0][1]
@@ -322,9 +326,33 @@ class Ribbon2D(Electrode):
                                         hNN[j - 1, int(2 * (atomnr + N_y - 1) - 1)] = -all_k_xy[0][1]
                                         hNN[j, int(2 * (atomnr + N_y - 1) - 2)] = -all_k_xy[0][1]
 
-                                    elif atomnr > N_y and interaction_range > 1:
-                                        hNN[j, int(j - 1 - 2 * (atomnr - N_y + 1))] = -all_k_xy[0][1]
-                                        hNN[j - 1, int(j - 1 - 2 * (atomnr - N_y + 1) + 1)] = -all_k_xy[0][1]
+                                    # elif atomnr > N_y and interaction_range > 1:
+                                    #     hNN[j, int(j - 1 - 2 * (atomnr - N_y + 1))] = -all_k_xy[0][1]
+                                    #     hNN[j - 1, int(j - 1 - 2 * (atomnr - N_y + 1) + 1)] = -all_k_xy[0][1]
+                                    
+                                    elif atomnr > N_y and interaction_range > 1 and (atomnr == (i + 1) * N_y or atomnr == i * N_y + 1) and atomnr <= N_y * interaction_range - N_y:
+                                        # N_y == 2 case
+                                        if atomnr == i * N_y + 1:
+                                            hNN[j, 2 * int(i * N_y + 1 + N_y + 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j - 1, 2 * int(i * N_y + 1 + N_y + 1) - 1] = -all_k_xy[0][1]
+                                            
+                                            hNN[j, 2 * int(i * N_y + 1 - N_y + 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j - 1, 2 * int(i * N_y + 1 - N_y + 1) - 1] = -all_k_xy[0][1]
+                                        
+                                        elif atomnr == (i + 1) * N_y:
+                                            hNN[j, 2 * int((i + 1) * N_y + N_y - 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j - 1, 2 * int((i + 1) * N_y + N_y - 1) - 1] = -all_k_xy[0][1]
+                                            
+                                            hNN[j, 2 * int((i + 1) * N_y - N_y - 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j - 1, 2 * int((i + 1) * N_y - N_y - 1) - 1] = -all_k_xy[0][1]
+                                            
+                                    elif (atomnr == N_y * interaction_range - N_y + 1 or atomnr == N_y * interaction_range):
+                                        if atomnr == N_y * interaction_range - N_y + 1:
+                                            hNN[j, 2 * int(N_y * interaction_range - N_y + 1 - N_y + 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j - 1, 2 * int(N_y * interaction_range - N_y + 1 - N_y + 1) - 1] = -all_k_xy[0][1]
+                                        elif atomnr == N_y * interaction_range:
+                                            hNN[j, 2 * int(N_y * interaction_range - N_y - 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j - 1, 2 * int(N_y * interaction_range - N_y - 1) - 1] = -all_k_xy[0][1]
 
 
                                 hNN[j, j] = all_k_y[0][1]
@@ -340,7 +368,7 @@ class Ribbon2D(Electrode):
                                         
                                         if j + 2 * (k + 1) < i * 2 * N_y + 2 * N_y:
                                             hNN[j, j + 2 * (k + 1)] = -all_k_y[k][1]
-                                        if j - 2 * (k + 1) >= 0 + i * 2 * N_y:
+                                        if j - 2 * (k + 1) >= i * 2 * N_y:
                                             hNN[j, j - 2 * (k + 1)] = -all_k_y[k][1]
 
                                 else:
@@ -349,7 +377,7 @@ class Ribbon2D(Electrode):
                                     
                                         if j + 2 * (k + 1) < i * 2 * N_y + 2 * N_y:
                                             hNN[j, j + 2 * (k + 1)] = -all_k_y[k][1]
-                                        if j - 2 * (k + 1) >= 0 + i * 2 * N_y:
+                                        if j - 2 * (k + 1) >= i * 2 * N_y:
                                             hNN[j, j - 2 * (k + 1)] = -all_k_y[k][1]
 
 
@@ -387,7 +415,7 @@ class Ribbon2D(Electrode):
                                         hNN[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
                                         # second atom
                                         hNN[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
-                                        hNN[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
 
                                         ## layer after
                                         # first atom
@@ -415,12 +443,12 @@ class Ribbon2D(Electrode):
                                         
                                         if j + 2 * (k + 1) < i * 2 * N_y + 2 * N_y:
                                             hNN[j, j + 2 * (k + 1)] = -all_k_y[k][1]
-                                        if j - 2 * (k + 1) >= 0:
+                                        if j - 2 * (k + 1) > i * 2 * N_y:
                                             hNN[j, j - 2 * (k + 1)] = -all_k_y[k][1]
 
                                 else:
                                     for k in range(1, interaction_range):
-                                        if atomnr - k - 1 > 0 + i * 2 * N_y and atomnr + k < N_y * interaction_range:
+                                        if atomnr - k - 1 > i * N_y and atomnr + k < N_y + i * N_y:#N_y * interaction_range:
                                             hNN[j, j] += 2 * all_k_y[k][1]
                                         elif (atomnr - k - 1 <= i * N_y and atomnr + k < i * N_y + N_y) or (atomnr - k - 1 > i * N_y and atomnr + k >= i * N_y + N_y):
                                             hNN[j, j] += all_k_y[k][1]
@@ -471,7 +499,7 @@ class Ribbon2D(Electrode):
                                 else:
                                     h00[j, j] += all_k_x[k][1]
                         
-                        elif atomnr > i * N_y and atomnr < (i + 1) * N_y and (i + 1) * N_y < N_y * interaction_range:
+                        elif atomnr > i * N_y and atomnr <= (i + 1) * N_y and (i + 1) * N_y < N_y * interaction_range:
                             for k in range(interaction_range):
                                 if i - k > 0:
                                     h00[j, j] += 2 * all_k_x[k][1]
@@ -485,21 +513,23 @@ class Ribbon2D(Electrode):
                                 h00[j, j - 2 * (k + 1) * N_y] = -all_k_x[k][1]
 
                         # xy-coupling # TODO: do something to take account that only for Ny > 1 possible or leave it to the user?
-                        if j == 0 or j == 2 * N_y - 2:
-                            h00[j, j + 1] = all_k_xy[0][1]
-                            h00[j + 1, j] = all_k_xy[0][1]
+                        if N_y > 1:
+                            
+                            if j == 0 or j == 2 * N_y - 2:
+                                h00[j, j + 1] = all_k_xy[0][1]
+                                h00[j + 1, j] = all_k_xy[0][1]
 
-                        elif j < 2 * N_y - 2:
-                            h00[j, j + 1] = 2 * all_k_xy[0][1]
-                            h00[j + 1, j] = 2 * all_k_xy[0][1]
+                            elif j < 2 * N_y - 2:
+                                h00[j, j + 1] = 2 * all_k_xy[0][1]
+                                h00[j + 1, j] = 2 * all_k_xy[0][1]
 
-                        elif (j == i * 2 * N_y or j == i * 2 * N_y + 2 * N_y - 2) and (j != 0 and j != 2 * N_y - 2):
-                            h00[j, j + 1] = 2 * all_k_xy[0][1]
-                            h00[j + 1, j] = 2 * all_k_xy[0][1]
+                            elif (j == i * 2 * N_y or j == i * 2 * N_y + 2 * N_y - 2) and (j != 0 and j != 2 * N_y - 2):
+                                h00[j, j + 1] = 2 * all_k_xy[0][1]
+                                h00[j + 1, j] = 2 * all_k_xy[0][1]
 
-                        elif j != 0 + i * 2 * N_y and j != i * 2 * N_y + 2 * N_y - 2 and N_y > 2:
-                            h00[j, j + 1] = 4 * all_k_xy[0][1]
-                            h00[j + 1, j] = 4 * all_k_xy[0][1]
+                            elif j != 0 + i * 2 * N_y and j != i * 2 * N_y + 2 * N_y - 2 and N_y > 2:
+                                h00[j, j + 1] = 4 * all_k_xy[0][1]
+                                h00[j + 1, j] = 4 * all_k_xy[0][1]
                         
 
                     else:
@@ -517,16 +547,38 @@ class Ribbon2D(Electrode):
                                         h00[j - 1, int(j - 1 + 2 * (atomnr + N_y + 1) - 1)] = -all_k_xy[0][1]
                                         h00[j, int(j - 1 + 2 * (atomnr + N_y + 1) - 2)] = -all_k_xy[0][1]
 
-                                    elif atomnr ==  N_y and interaction_range > 1:
+                                    elif atomnr == N_y and interaction_range > 1:
                                         h00[j - 1, int(2 * (atomnr + N_y - 1) - 1)] = -all_k_xy[0][1]
                                         h00[j, int(2 * (atomnr + N_y - 1) - 2)] = -all_k_xy[0][1]
 
-                                    elif atomnr > N_y and interaction_range > 1:
-                                        h00[j, int(j - 1 - 2 * (atomnr - N_y + 1))] = -all_k_xy[0][1]
-                                        h00[j - 1, int(j - 1 - 2 * (atomnr - N_y + 1) + 1)] = -all_k_xy[0][1]
-                                
+                                    elif atomnr > N_y and interaction_range > 1 and (atomnr == (i + 1) * N_y or atomnr == i * N_y + 1) and atomnr <= N_y * interaction_range - N_y:
+                                        # N_y == 2 case
+                                        if atomnr == i * N_y + 1:
+                                            h00[j, 2 * int(i * N_y + 1 + N_y + 1) - 2] = -all_k_xy[0][1]
+                                            h00[j - 1, 2 * int(i * N_y + 1 + N_y + 1) - 1] = -all_k_xy[0][1]
+                                            
+                                            h00[j, 2 * int(i * N_y + 1 - N_y + 1) - 2] = -all_k_xy[0][1]
+                                            h00[j - 1, 2 * int(i * N_y + 1 - N_y + 1) - 1] = -all_k_xy[0][1]
+                                        
+                                        elif atomnr == (i + 1) * N_y:
+                                            h00[j, 2 * int((i + 1) * N_y + N_y - 1) - 2] = -all_k_xy[0][1]
+                                            h00[j - 1, 2 * int((i + 1) * N_y + N_y - 1) - 1] = -all_k_xy[0][1]
+                                            
+                                            h00[j, 2 * int((i + 1) * N_y - N_y - 1) - 2] = -all_k_xy[0][1]
+                                            h00[j - 1, 2 * int((i + 1) * N_y - N_y - 1) - 1] = -all_k_xy[0][1]
+                                            
+                                    elif (atomnr == N_y * interaction_range - N_y + 1 or atomnr == N_y * interaction_range):
+                                        
+                                        if atomnr == N_y * interaction_range - N_y + 1:
+                                            h00[j, 2 * int(N_y * interaction_range - N_y + 1 - N_y + 1) - 2] = -all_k_xy[0][1]
+                                            h00[j - 1, 2 * int(N_y * interaction_range - N_y + 1 - N_y + 1) - 1] = -all_k_xy[0][1]
+                                        elif atomnr == N_y * interaction_range:
+                                            h00[j, 2 * int(N_y * interaction_range - N_y - 1) - 2] = -all_k_xy[0][1]
+                                            h00[j - 1, 2 * int(N_y * interaction_range - N_y - 1) - 1] = -all_k_xy[0][1]
 
 
+
+                                #y - coupling
                                 h00[j, j] = all_k_y[0][1]
 
                                 if j == 1 + i * 2 * N_y:
@@ -540,7 +592,7 @@ class Ribbon2D(Electrode):
                                         
                                         if j + 2 * (k + 1) < i * 2 * N_y + 2 * N_y:
                                             h00[j, j + 2 * (k + 1)] = -all_k_y[k][1]
-                                        if j - 2 * (k + 1) >= 0 + i * 2 * N_y:
+                                        if j - 2 * (k + 1) >= i * 2 * N_y:
                                             h00[j, j - 2 * (k + 1)] = -all_k_y[k][1]
 
                                 else:
@@ -558,7 +610,7 @@ class Ribbon2D(Electrode):
                                 atomnr = np.ceil(float(j) / 2)
                                 h00[j, j] = 2 * all_k_y[0][1]
                                 
-                                # xy-coupling inner atom
+                                # xy-coupling inner atom, inner layers
                                 if interaction_range > 1:
                                     
                                     if atomnr < N_y: #and interaction_range > 1:
@@ -616,12 +668,12 @@ class Ribbon2D(Electrode):
                                         
                                         if j + 2 * (k + 1) < i * 2 * N_y + 2 * N_y:
                                             h00[j, j + 2 * (k + 1)] = -all_k_y[k][1]
-                                        if j - 2 * (k + 1) >= 0:
+                                        if j - 2 * (k + 1) > i * 2 * N_y:
                                             h00[j, j - 2 * (k + 1)] = -all_k_y[k][1]
 
                                 else:
                                     for k in range(1, interaction_range):
-                                        if atomnr - k - 1 > 0 + i * 2 * N_y and atomnr + k < N_y * interaction_range:
+                                        if atomnr - k - 1 > i * N_y and atomnr + k < N_y + i * N_y:#N_y * interaction_range:
                                             h00[j, j] += 2 * all_k_y[k][1]
                                         elif (atomnr - k - 1 <= i * N_y and atomnr + k < i * N_y + N_y) or (atomnr - k - 1 > i * N_y and atomnr + k >= i * N_y + N_y):
                                             h00[j, j] += all_k_y[k][1]
@@ -700,7 +752,9 @@ class Ribbon2D(Electrode):
         H_NN = build_H_NN_new()
         H_00 = build_H_00_new()
         H_01 = build_H_01_new()
-
+        
+        assert (0 <= np.abs(np.sum(H_00 + H_01)) < 1E-10), "Sum rule violated! H_00 + H_01 is not zero! Check the force constants and the interaction range."
+        assert (0 <= np.abs(np.sum(H_NN + 2 * H_01)) < 1E-10), "Sum rule violated! H_NN + 2 * H_01 is not zero! Check the force constants and the interaction range."
         H_01_dagger = np.transpose(np.conj(H_01))
         
         # Start decimation algorithm
@@ -788,66 +842,66 @@ class Ribbon2D(Electrode):
                 direct_interaction[i + 1, direct_interaction.shape[1] - 2] = -all_k_c_xy[0][1]
 
         #TODO: get on the fly force constants between electrode and junction (or anything?)
+
+        k_lc_LL = np.zeros((2 * N_y * interaction_range, 2 * N_y * interaction_range), dtype=float) 
         
-        if N_y_scatter == N_y:
-            k_lc_LL = H_01
+        interaction_layers_dict = dict()
         
-        else:
-            k_lc_LL = np.zeros((2 * N_y * interaction_range, 2 * N_y * interaction_range), dtype=float) 
+        for i in range(interaction_range):
             
-            interaction_layers_dict = dict()
+            interaction_layer = np.zeros((2 * N_y, 2 * N_y), dtype=float)
             
-            for i in range(interaction_range):
+            #if i == 0: # direct NN layer
+            for j in range(interaction_layer.shape[0]):
                 
-                interaction_layer = np.zeros((2 * N_y, 2 * N_y), dtype=float)
-                
-                if i == 0: # direct NN layer
-                    for j in range(interaction_layer.shape[0]):
+                if j % 2 == 0:
+                    atomnr = np.ceil(float(j + 1) / 2)
+                    
+                    if atomnr == ((N_y - N_y_scatter) // 2) or atomnr == ((N_y - N_y_scatter) // 2) + N_y_scatter + 1:
                         
-                        if j % 2 == 0:
-                            atomnr = np.ceil(float(j + 1) / 2)
-                            
-                            if atomnr == ((N_y - N_y_scatter) // 2) or atomnr == ((N_y - N_y_scatter) // 2) + N_y_scatter + 1:
+                        if i == 0:
+                            interaction_layer[j, j + 1] = -all_k_c_xy[0][1]
+                            interaction_layer[j + 1, j] = -all_k_c_xy[0][1]
+                    
+                    elif ((N_y - N_y_scatter) // 2) < atomnr < ((N_y - N_y_scatter) // 2) + N_y_scatter + 1:
+                        
+                        interaction_layer[j, j] = -sum(all_k_c_x[k][1] for k in range(i, interaction_range))
+                        
+            
+                        if i == 0:
+
+                            if (atomnr == ((N_y - N_y_scatter) // 2) + 1 or atomnr == ((N_y - N_y_scatter) // 2) + N_y_scatter) and N_y_scatter > 1:
                                 interaction_layer[j, j + 1] = -all_k_c_xy[0][1]
                                 interaction_layer[j + 1, j] = -all_k_c_xy[0][1]
-                            
-                            elif ((N_y - N_y_scatter) // 2) < atomnr < ((N_y - N_y_scatter) // 2) + N_y_scatter + 1:
-                                
-                                interaction_layer[j, j] = -sum(all_k_c_x[k][1] for k in range(i, interaction_range))
-                                
-                                if (atomnr == ((N_y - N_y_scatter) // 2) + 1 or atomnr == ((N_y - N_y_scatter) // 2) + N_y_scatter) and N_y_scatter > 1:
-                                    interaction_layer[j, j + 1] = -all_k_c_xy[0][1]
-                                    interaction_layer[j + 1, j] = -all_k_c_xy[0][1]
-                                elif N_y_scatter > 1:
-                                    interaction_layer[j, j + 1] = -2 * all_k_c_xy[0][1]
-                                    interaction_layer[j + 1, j] = -2 * all_k_c_xy[0][1]
-                    
-                    interaction_layers_dict[i] = interaction_layer       
-                              
-                else:
-                    
-                    for j in range(interaction_layer.shape[0]):
-                        if j % 2 == 0:
-                            if (N_y - N_y_scatter // 2) < atomnr < (N_y - N_y_scatter // 2) + N_y_scatter + 1:
-                                k_lc_LL[j, j] = -sum(all_k_c_x[k][1] for k in range(i, interaction_range))
-                    
-                    interaction_layers_dict[i] = interaction_layer
-                    
-                
+                            elif N_y_scatter > 1:
+                                interaction_layer[j, j + 1] = -2 * all_k_c_xy[0][1]
+                                interaction_layer[j + 1, j] = -2 * all_k_c_xy[0][1]
+            
+            interaction_layers_dict[i] = interaction_layer       
                         
-            for l in range(interaction_range):
-                k_lc_LL[l * interaction_layers_dict[l].shape[0]: l * interaction_layers_dict[l].shape[0] + interaction_layers_dict[l].shape[0], \
-                    l * interaction_layers_dict[l].shape[0]: l * interaction_layers_dict[l].shape[0] + interaction_layers_dict[l].shape[0]] = interaction_layers_dict[l]
-               
-
                     
-
+        for l in range(interaction_range):
+            k_lc_LL[l * interaction_layers_dict[l].shape[0]: l * interaction_layers_dict[l].shape[0] + interaction_layers_dict[l].shape[0], \
+                l * interaction_layers_dict[l].shape[0]: l * interaction_layers_dict[l].shape[0] + interaction_layers_dict[l].shape[0]] = interaction_layers_dict[interaction_range - 1 - l]
+            
+        """if self.left == False and self.right == True and interaction_range > 1:
+            
+            mid_row = k_lc_LL.shape[0] // 2
+            mid_col = k_lc_LL.shape[1] // 2
+            
+            temp = k_lc_LL[:mid_row, :mid_col].copy()
+            
+            k_lc_LL[:mid_row, :mid_col] = k_lc_LL[mid_row:, mid_col:]
+            k_lc_LL[mid_row:, mid_col:] = temp"""
+            
+            
+            
         #g = map(lambda x: np.dot(x, np.linalg.inv(np.identity(x.shape[0]) + np.dot(k_lc_LL, x))), g_0)
         g = map(lambda x: np.dot(np.linalg.inv(np.identity(x.shape[0]) + np.dot(x, k_lc_LL)), x), g_0)
         g = np.array([item for item in g])
         
-        dos = (-1 / np.pi) * np.imag(np.trace(g, axis1=1, axis2=2))
-        dos_real = np.real(np.trace(g, axis1=1, axis2=2))
+        dos = (-1 / np.pi) * np.imag(np.trace(g_0, axis1=1, axis2=2))
+        dos_real = np.real(np.trace(g_0, axis1=1, axis2=2))
         
         return g, k_lc_LL, direct_interaction, dos, dos_real
 
@@ -985,8 +1039,8 @@ class InfiniteFourier2D(Electrode):
         g = map(lambda x: np.dot(x * g0_template, np.linalg.inv(np.identity(g0_template.shape[0]) + np.dot(k_lc_LL, x * g0_template))), self.g0)
         g = np.array([item for item in g])
         
-        dos = (-1 / np.pi) * np.imag(g)
-        dos_real = np.real(g)
+        dos = (-1 / np.pi) * np.imag(self.g0)
+        dos_real = np.real(self.g0)
 
         return g, k_lc_LL, dos, dos_real
 
@@ -1007,7 +1061,7 @@ if __name__ == '__main__':
 
     electrode_debeye = DebeyeModel(w, k_c, w_D)
     electrode_chain1d = Chain1D(w, interaction_range=2, interact_potential='reciproke_squared', atom_type="Au", lattice_constant=3.0, k_x=0.1, k_c=0.1)
-    electrode_2dribbon = Ribbon2D(w, interaction_range=2, interact_potential='reciproke_squared', atom_type="Au", lattice_constant=3.0, N_y=3, N_y_scatter=1, M_L=1, M_C=1, k_x=900, k_y=900, k_xy=180, k_c=900, k_c_xy=180)
+    electrode_2dribbon = Ribbon2D(w, interaction_range=3, interact_potential='reciproke_squared', atom_type="Au", lattice_constant=3.0, N_y=1, N_y_scatter=1, M_L=1, M_C=1, k_x=900, k_y=900, k_xy=180, k_c=900, k_c_xy=180)
     electrode_infinite = InfiniteFourier2D(w, interaction_range=1, interact_potential='reciproke_squared', atom_type="Au", lattice_constant=3.0, N_q=100, N_y_scatter=1, k_x=180, k_y=180, k_xy=0, k_c=180, k_c_xy=0)
 
     print("debug")

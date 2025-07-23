@@ -153,10 +153,10 @@ def calculate_G_CC(E, Sigma_l, Sigma_r, k_x, k_y, eta=1E-9, model = "1Dchain"):
         K_CC = np.array([[2*k_x, -k_x],
                          [-k_x, 2*k_x]])
     elif model == "3_2_config":
-        K_CC = np.array([[2 * k_x, 0, -k_x, 0],
-                         [0, 0, 0, 0],
-                         [-k_x, 0, 2 * k_x, 0],
-                         [0, 0, 0, 0]])
+        K_CC = np.array([[2 * k_x, 2*k_xy, -k_x, 0],
+                         [2*k_xy, 0, 0, 0],
+                         [-k_x, 0, 2 * k_x, 2*k_xy],
+                         [0, 0, 2*k_xy, 0]])
 
     G_CC = np.linalg.inv(np.identity(K_CC.shape[0])[None, :, :] * (E[:, None, None]+ (1.j * eta))**2 - K_CC[None, :, :] - Sigma_l - Sigma_r)
     return G_CC
@@ -182,7 +182,7 @@ def calculate_1d_uncoupled_sfg(E, k_x):
 if __name__ == '__main__':
     k_x = 100
     k_y = 100
-    k_xy = 0
+    k_xy = 20
     E = np.linspace(1E-3, 25, 500)
     #model = "1Dchain_single_site"
     #model = "1Dchain_2_sites"
@@ -198,7 +198,7 @@ if __name__ == '__main__':
     plt.plot(E, dos_real, label="real part")
     plt.plot(E, dos, label="dos")
     plt.legend()
-    plt.savefig(r'C:\Users\sevke\Desktop\Dev\MA\phonokit\src\plot\phonon_model_check_DOS.pdf', bbox_inches='tight')
+    #plt.savefig(r'C:\Users\sevke\Desktop\Dev\MA\phonokit\src\plot\phonon_model_check_DOS.pdf', bbox_inches='tight')
     #plt.show()
     #plt.clf()
 
@@ -213,7 +213,8 @@ if __name__ == '__main__':
 
     plt.plot(E, np.real(tau))
     plt.ylim(0,1.5)
-    plt.savefig(r'C:\Users\sevke\Desktop\Dev\MA\phonokit\src\plot\phonon_model_check.pdf', bbox_inches='tight')
+    #plt.savefig(r'C:\Users\sevke\Desktop\Dev\MA\phonokit\src\plot\phonon_model_check.pdf', bbox_inches='tight')
+    plt.show()
 
     print('debug')
 

@@ -155,10 +155,12 @@ class FiniteLattice2D(Model):
     This class creates a 2D finite lattice with a given number of layers (N_y) and a given number of atoms in each layer (N_x). Inherits from the Model class.
     """
 
-    def __init__(self, N_y, N_x, k_l_x, k_c_x, k_r_x, k_c_y, k_c_xy, k_l_xy, k_r_xy, interact_potential="reciproke_squared", interaction_range=1, lattice_constant=3.0, atom_type="Au"):
+    def __init__(self, N_y, N_x, N_y_el_L, N_y_el_R, k_l_x, k_c_x, k_r_x, k_c_y, k_c_xy, k_l_xy, k_r_xy, interact_potential="reciproke_squared", interaction_range=1, lattice_constant=3.0, atom_type="Au"):
         super().__init__(k_l_x, k_c_x, k_r_x, interact_potential, interaction_range, lattice_constant, atom_type)
         self.N_y = N_y
         self.N_x = N_x
+        self.N_y_el_L = N_y_el_L
+        self.N_y_el_R = N_y_el_R
         self.k_c_xy = k_c_xy * 1#(constants.eV2hartree / constants.ang2bohr ** 2)
         self.k_c_y = k_c_y * 1#(constants.eV2hartree / constants.ang2bohr ** 2)
         self.k_l_xy = k_l_xy * 1#(constants.eV2hartree / constants.ang2bohr ** 2)
@@ -176,6 +178,7 @@ class FiniteLattice2D(Model):
         """
         
         assert (self.interaction_range < self.N_y or self.interaction_range < self.N_x), "Interaction range must be smaller than the number of atoms in x- and y-direction!"
+        assert (self.interaction_range <= self.N_x // 2), "Interaction range must be smaller than half the number of atoms in x-direction! (In order of simplicity and physical relevance)"
         #assert (self.N_y > 1 and self.N_x > 1), "Number of atoms in x- and y-direction must be greater than 1 otherwise take Chain1D model!"
 
         def build_bulk_layers(left=False, right=False):
@@ -202,17 +205,18 @@ class FiniteLattice2D(Model):
                     # diagonal elements x coupling
                     if j % 2 == 0:
                         
-                        hNN[j, j] = sum(2 * all_k_c_x[k][1] for k in range(i)) 
+                        if right != False or left != False:
+                            hNN[j, j] = sum(2 * all_k_c_x[k][1] for k in range(i)) 
+                            hNN[j, j] += sum(all_k_c_x[k][1] for k in range(i, self.interaction_range) if (self.N_x > self.interaction_range and k <= self.N_x - self.interaction_range))
                         
-                        if left == True and right == False:
-                            hNN[j, j] += sum(all_k_l_x[k][1] for k in range(i, self.interaction_range))
-                        
-                        elif right == True and left == False:
-                            hNN[j, j] += sum(all_k_r_x[k][1] for k in range(i, self.interaction_range))
-                        
-
-                        if i <= (self.N_x - 2) // 2:
-                            hNN[j, j] += sum(all_k_c_x[k][1] for k in range(i, self.interaction_range) if k <= (self.N_x - 2) // 2)
+                            if left == True and right == False:
+                                hNN[j, j] += sum(all_k_l_x[k][1] for k in range(i, self.interaction_range))
+                            
+                            elif right == True and left == False:
+                                hNN[j, j] += sum(all_k_r_x[k][1] for k in range(i, self.interaction_range))
+                                
+                        if left == False and right == False:
+                            hNN[j, j] = sum(2 * all_k_c_x[k][1] for k in range(self.interaction_range))
 
                         # xy-coupling
                         if j == 0 or j == hNN.shape[0] - 2:
@@ -288,6 +292,9 @@ class FiniteLattice2D(Model):
                                         hNN[j, j - 2 * (k + 1)] = -all_k_c_y[k][1]
 
                 bulk_hessians.append((i, hNN))
+                
+                if left == False and right == False:
+                    break
                             
             return bulk_hessians
         
@@ -349,8 +356,7 @@ class FiniteLattice2D(Model):
 
                 if i % 2 == 0:
                     # x coupling in the coupling range
-                    H_00[i, i] = sum(all_k_c_x[k][1] for k in range(self.interaction_range) if (self.N_x > self.interaction_range and k < self.N_x - self.interaction_range)
-                                    or (self.N_x <= self.interaction_range and k < self.N_x // 2))
+                    H_00[i, i] = sum(all_k_c_x[k][1] for k in range(self.interaction_range) if (self.N_x > self.interaction_range and k <= self.N_x - self.interaction_range))
                     
                     if left == True and right == False:
                         H_00[i, i] += sum(all_k_l_x[k][1] for k in range(self.interaction_range))
@@ -365,24 +371,32 @@ class FiniteLattice2D(Model):
                         H_00[i + 1, i] = all_k_c_xy[0][1]
 
                         if left == True and right == False:
-                            H_00[i, i + 1] = all_k_l_xy[0][1]
-                            H_00[i + 1, i] = all_k_l_xy[0][1]
+                            if self.N_y == self.N_y_el_L:
+                                H_00[i, i + 1] += all_k_l_xy[0][1]
+                                H_00[i + 1, i] += all_k_l_xy[0][1]
+                            else:
+                                H_00[i, i + 1] += 2 * all_k_l_xy[0][1]
+                                H_00[i + 1, i] += 2 * all_k_l_xy[0][1]
                         
                         elif right == True and left == False:
-                            H_00[i, i + 1] = all_k_r_xy[0][1]
-                            H_00[i + 1, i] = all_k_r_xy[0][1]
+                            if self.N_y == self.N_y_el_R:
+                                H_00[i, i + 1] += all_k_r_xy[0][1]
+                                H_00[i + 1, i] += all_k_r_xy[0][1]
+                            else:
+                                H_00[i, i + 1] += 2 * all_k_r_xy[0][1]
+                                H_00[i + 1, i] += 2 * all_k_r_xy[0][1]
 
                     else:
                         H_00[i, i + 1] = 2 * all_k_c_xy[0][1]
                         H_00[i + 1, i] = 2 * all_k_c_xy[0][1]
 
                         if left == True and right == False:
-                            H_00[i, i + 1] = 2 * all_k_l_xy[0][1]
-                            H_00[i + 1, i] = 2 * all_k_l_xy[0][1]
+                            H_00[i, i + 1] += 2 * all_k_l_xy[0][1]
+                            H_00[i + 1, i] += 2 * all_k_l_xy[0][1]
 
                         elif right == True and left == False:
-                            H_00[i, i + 1] = 2 * all_k_r_xy[0][1]
-                            H_00[i + 1, i] = 2 * all_k_r_xy[0][1]
+                            H_00[i, i + 1] += 2 * all_k_r_xy[0][1]
+                            H_00[i + 1, i] += 2 * all_k_r_xy[0][1]
 
                     
                 else:
@@ -460,7 +474,7 @@ class FiniteLattice2D(Model):
             for i in range(self.N_x):
                 
                 atomnr = i + 1
-
+                    
                 # take care of interaction range
                 for j in range(self.interaction_range):
                     
@@ -470,6 +484,16 @@ class FiniteLattice2D(Model):
                         hessian[2 * i, 2 * (i - j - 1)] = -all_k_c_x[j][1]
 
                 hessian[2 * i, 2 * i] = -np.sum(hessian[2 * i, :])
+                
+                if atomnr == 1 or atomnr == self.N_x:
+                    #xy coupling to the electrodes
+                    if atomnr == 1 and self.N_y_el_L > 0:   
+                        hessian[2 * i, 2 * i + 1] = 2 * all_k_l_xy[0][1]
+                        hessian[2 * i + 1, 2 * i] = 2 * all_k_l_xy[0][1]
+                        
+                    elif atomnr == self.N_x and self.N_y_el_R > 0:
+                        hessian[2 * i, 2 * i + 1] = 2 * all_k_r_xy[0][1]
+                        hessian[2 * i + 1, 2 * i] = 2 * all_k_r_xy[0][1]
 
                 # left side
                 if atomnr - self.interaction_range <= 0:
@@ -527,7 +551,7 @@ class FiniteLattice2D(Model):
 
 
             #bulk layers + interaction
-            elif i < len(bulk_layers_l) and i < self.N_x // 2:
+            elif i <= len(bulk_layers_l) and i < self.N_x // 2:
                 hessian[i * H_00_l.shape[0]: i * H_00_l.shape[0] + H_00_l.shape[0], 
                         i * H_00_l.shape[0]: i * H_00_l.shape[0] + H_00_l.shape[0]] = bulk_layers_l[i - 1][1]
                 
@@ -540,7 +564,7 @@ class FiniteLattice2D(Model):
                         hessian[i * H_00_l.shape[0]: i * H_00_l.shape[0] + H_00_l.shape[0], 
                                 (i + j + 1) * H_00_l.shape[0]: (i + j + 1) * H_00_l.shape[0] + H_00_l.shape[0]] = layer_interactions[j][1]
 
-            elif i >= self.N_x // 2 and i >= self.N_x - len(bulk_layers_r):
+            elif i >= self.N_x - len(bulk_layers_r) - 1:#and i >= self.N_x // 2:
                 hessian[i * H_00_l.shape[0]: i * H_00_l.shape[0] + H_00_l.shape[0], 
                         i * H_00_l.shape[0]: i * H_00_l.shape[0] + H_00_l.shape[0]] = bulk_layers_r[self.N_x - i - 2][1]
 
@@ -621,7 +645,7 @@ class FiniteLattice2D(Model):
 if __name__ == '__main__':
 
     #TODO: Doesn't work for interaction_range > N_x // 2 --> Fix this
-    junction2D = FiniteLattice2D(N_y=2, N_x=3, k_l_x=900, k_c_x=900, k_r_x=900, k_c_y=900, k_c_xy=0, k_l_xy=0, k_r_xy=0, interaction_range=2)
+    junction2D = FiniteLattice2D(N_y=2, N_x=4, N_y_el_L=2, N_y_el_R=2, k_l_x=900, k_c_x=450, k_r_x=900, k_c_y=450, k_c_xy=180, k_l_xy=180, k_r_xy=180, interaction_range=2)
     junction1D = Chain1D(interact_potential="reciproke_squared", interaction_range=1, lattice_constant=3.0, atom_type="Au", k_c=900, k_l=900, k_r=900, N=2)
     print('debugging')
 

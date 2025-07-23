@@ -2,6 +2,7 @@ import copy
 import os.path
 import sys
 import json
+from unicodedata import name
 
 import numpy as np
 from model_systems import * 
@@ -33,7 +34,7 @@ class PhononTransport:
 	Also describes the hessian matrix of the center part ab initio.
 	"""
 
-	def __init__(self, data_path, electrode_dict_L, electrode_dict_R, scatter_dict, E_D, M_L, M_R, M_C, N, T_min, T_max, kappa_grid_points):
+	def __init__(self, data_path, sys_descr, electrode_dict_L, electrode_dict_R, scatter_dict, E_D, M_L, M_R, M_C, N, T_min, T_max, kappa_grid_points):
 		"""
 		Args:
 			electrode_dict (dict): Dictionary containing the configuration of the enabled electrode.
@@ -48,6 +49,7 @@ class PhononTransport:
 		"""
 
 		self.data_path = data_path
+		self.sys_descr = sys_descr
 		self.electrode_dict_L = electrode_dict_L
 		self.electrode_dict_R = electrode_dict_R
 		self.scatter_dict = scatter_dict
@@ -163,7 +165,9 @@ class PhononTransport:
 					k_y = electrode_dict["k_y"],
 					k_xy = electrode_dict["k_xy"],
 					k_c = electrode_dict["k_c"],
-					k_c_xy = electrode_dict["k_c_xy"]
+					k_c_xy = electrode_dict["k_c_xy"],
+					left = electrode_dict["left"],
+					right = electrode_dict["right"]
 				)
 			
 			case "InfiniteFourier2D":
@@ -201,6 +205,8 @@ class PhononTransport:
 				return FiniteLattice2D(
 					N_y = scatter_dict["N_y"],
 					N_x = scatter_dict["N_x"],
+					N_y_el_L = electrode_dict_l["N_y"],
+					N_y_el_R = electrode_dict_r["N_y"],
 					k_l_x = electrode_dict_l["k_x"],
 					k_c_x = scatter_dict["k_x"],
 					k_r_x = electrode_dict_r["k_x"],
@@ -324,7 +330,7 @@ class PhononTransport:
     
 				#set up LC interaction matrix		
 				atomnr_el = 0
-				
+      
 				for i in range(interaction_range_L):
 					for at_el in range(1, N_y_L + 1):
 						atomnr_el += 1
@@ -332,31 +338,40 @@ class PhononTransport:
 						if ((N_y_L - N_y_scatter) // 2) <= at_el <= ((N_y_L - N_y_scatter) // 2) + N_y_scatter + 1:
 		
 							atomnr_sc = 0
-							for j in range(i + 1):
+									
+							for j in range(i + 1, 0, -1):
+								
 								for at_sc in range(1, N_y_scatter + 1):
 									atomnr_sc += 1
+									#atomnr_sc -= -1
 									# look if sc and el are aligned 
 									if at_el == at_sc + ((N_y_L - N_y_scatter) // 2):
 										# coupling in x-direction
-										k_LC_temp[2 * (atomnr_el - 1), 2 * (atomnr_sc - 1)] = -all_k_c_x_L[-(j + 1)][1]
+										
+										#k_LC_temp[2 * (atomnr_el - 1), 2 * (atomnr_sc - 1)] = -all_k_c_x_L[-(j + 1)][1]
+										k_LC_temp[2 * (atomnr_el - 1), 2 * (atomnr_sc - 1)] = -all_k_c_x_L[-j][1]
 		
 									if i == interaction_range_L - 1:
+             
 										if (at_el == ((N_y_L - N_y_scatter) // 2) and at_sc == 1) or (at_el == ((N_y_L - N_y_scatter) // 2) + N_y_scatter + 1 and at_sc == N_y_scatter):
 											# coupling also xy
 											k_LC_temp[2 * (atomnr_el - 1), 2 * (at_sc - 1) + 1] = -all_k_c_xy_L[0][1]
 											k_LC_temp[2 * (atomnr_el - 1) + 1, 2 * (at_sc - 1)] = -all_k_c_xy_L[0][1]
-
+           
+										# xy coupling only for diagonally opposite atoms (neighbors in y-direction)
 										if at_el == at_sc + ((N_y_L - N_y_scatter) // 2) and N_y_scatter > 1:
            
-											if at_sc == 1:
-												# coupling also xy-direction
-												k_LC_temp[2 * (atomnr_el - 1) + 1, 2 * at_sc] = -all_k_c_xy_L[0][1]
-												k_LC_temp[2 * (atomnr_el - 1), 2 * at_sc + 1] = -all_k_c_xy_L[0][1]
-											elif at_sc == N_y_scatter:
-												# coupling also xy-direction
+											if at_sc > 1:
+												# coupling to previous neighbor (diagonal)
 												k_LC_temp[2 * (atomnr_el - 1) + 1, 2 * (at_sc - 2)] = -all_k_c_xy_L[0][1]
 												k_LC_temp[2 * (atomnr_el - 1), 2 * (at_sc - 2) + 1] = -all_k_c_xy_L[0][1]
-										
+
+											if at_sc < N_y_scatter:
+												# coupling to next neighbor (diagonal)
+												k_LC_temp[2 * (atomnr_el - 1) + 1, 2 * at_sc] = -all_k_c_xy_L[0][1]
+												k_LC_temp[2 * (atomnr_el - 1), 2 * at_sc + 1] = -all_k_c_xy_L[0][1]
+					
+												
             
 				atomnr_el = 0
 				
@@ -367,30 +382,44 @@ class PhononTransport:
 						if ((N_y_R - N_y_scatter) // 2) <= at_el <= ((N_y_R - N_y_scatter) // 2) + N_y_scatter + 1:
 		
 							atomnr_sc = 0
-							for j in range(i + 1):
+								
+							for j in range(i + 1, 0, -1):
+								
 								for at_sc in range(1, N_y_scatter + 1):
 									atomnr_sc += 1
+									
 									# look if sc and el are aligned 
 									if at_el == at_sc + ((N_y_R - N_y_scatter) // 2):
 										# coupling in x-direction
-										k_RC_temp[2 * (atomnr_el - 1), 2 * (atomnr_sc - 1)] = -all_k_c_x_R[-(j + 1)][1]
+									
+										k_RC_temp[2 * (atomnr_el - 1), 2 * (atomnr_sc - 1)] = -all_k_c_x_R[-j][1]
 		
 									if i == interaction_range_R - 1:
+             
 										if (at_el == ((N_y_R - N_y_scatter) // 2) and at_sc == 1) or (at_el == ((N_y_R - N_y_scatter) // 2) + N_y_scatter + 1 and at_sc == N_y_scatter):
 											# coupling also xy
 											k_RC_temp[2 * (atomnr_el - 1), 2 * (at_sc - 1) + 1] = -all_k_c_xy_R[0][1]
 											k_RC_temp[2 * (atomnr_el - 1) + 1, 2 * (at_sc - 1)] = -all_k_c_xy_R[0][1]
-
+           
+										# xy coupling only for diagonally opposite atoms (neighbors in y-direction)
 										if at_el == at_sc + ((N_y_R - N_y_scatter) // 2) and N_y_scatter > 1:
            
-											if at_sc == 1:
-												# coupling also xy-direction
-												k_RC_temp[2 * (atomnr_el - 1) + 1, 2 * at_sc] = -all_k_c_xy_R[0][1]
-												k_RC_temp[2 * (atomnr_el - 1), 2 * at_sc + 1] = -all_k_c_xy_R[0][1]
-											elif at_sc == N_y_scatter:
-												# coupling also xy-direction
+											if at_sc > 1:
+												# coupling to previous neighbor (diagonal)
 												k_RC_temp[2 * (atomnr_el - 1) + 1, 2 * (at_sc - 2)] = -all_k_c_xy_R[0][1]
 												k_RC_temp[2 * (atomnr_el - 1), 2 * (at_sc - 2) + 1] = -all_k_c_xy_R[0][1]
+
+											if at_sc < N_y_scatter:
+												# coupling to next neighbor (diagonal)
+												k_RC_temp[2 * (atomnr_el - 1) + 1, 2 * at_sc] = -all_k_c_xy_R[0][1]
+												k_RC_temp[2 * (atomnr_el - 1), 2 * at_sc + 1] = -all_k_c_xy_R[0][1]
+
+				if interaction_range_R > 1:
+					mid_col_R = k_RC_temp.shape[1] // 2
+					k_RC_temp = np.hstack([k_RC_temp[:, mid_col_R:], k_RC_temp[:, :mid_col_R]])
+					
+     				#mid_row_R = k_RC_temp.shape[0] // 2
+					#k_RC_temp = np.vstack([k_RC_temp[mid_row_R:, :], k_RC_temp[:mid_row_R, :]])
 
 				# k_LC fill from left top
 				k_LC[:k_LC_temp.shape[0], :k_LC_temp.shape[1]] = k_LC_temp
@@ -456,7 +485,6 @@ class PhononTransport:
 						sigma_L[k][0, 0] = sigma_nu_l[k]
 						sigma_R[k][-1, -1] = sigma_nu_r[k]
 						
-  
 		# 2D case (decimation technique)
 		elif (electrode_dict_L["type"], electrode_dict_R["type"]) == ("Ribbon2D", "Ribbon2D") and \
 			(g_L.shape, g_R.shape) == ((self.N, 2 * self.electrode_L.interaction_range * self.electrode_L.N_y, 2 * self.electrode_L.interaction_range * self.electrode_L.N_y), \
@@ -468,12 +496,11 @@ class PhononTransport:
 			
 			#sigma_L_temp = np.array(list(map(lambda i: np.dot(np.dot(self.electrode_L.k_lc_LL.T, g_L[i]), self.electrode_L.k_lc_LL), self.i)))
 			#sigma_R_temp = np.array(list(map(lambda i: np.dot(np.dot(self.electrode_R.k_lc_LL.T, g_R[i]), self.electrode_R.k_lc_LL), self.i)))
+   
 			sigma_L = np.array(list(map(lambda i: np.dot(np.dot(k_LC.T, g_L[i]), k_LC), self.i)))
 			sigma_R = np.array(list(map(lambda i: np.dot(np.dot(k_RC.T, g_R[i]), k_RC), self.i)))
-			# TODO: FIX
-			"""for i in range(self.N):
-				sigma_L[i, 0: sigma_L_temp.shape[1], 0: sigma_L_temp.shape[2]] = sigma_L_temp[i]
-				sigma_R[i, sigma_R.shape[1] - sigma_R_temp.shape[1]: sigma_R.shape[1], sigma_R.shape[2] - sigma_R_temp.shape[2]: sigma_R.shape[2]] = sigma_R_temp[i]"""
+   
+			print('debug')
 
 		# 3D case (decimation technique) #TODO: Implementation
 		elif (electrode_dict_L["type"], electrode_dict_R["type"]) == ("Ribbon3D", "Ribbon3D") and \
@@ -580,22 +607,30 @@ class PhononTransport:
 	def	plot_transport(self, write_data=True):
 		"""Writes out the raw data and plots the transport properties of the system."""
 
+		# Filter out transmission values > 50 and < -50 to remove peaks that ruin the plot
+		mask = (self.T >= -50) & (self.T <= 50)
+		w_filtered = self.w[mask]
+		T_filtered = self.T[mask]
+
 		if write_data:
 			try:
-				top.write_plot_data(self.data_path + f"/PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_kc={self.scatter_dict["k_x"]}_kc_xy={self.scatter_dict["k_xy"]}.dat", (self.w, self.T), "w (sqrt(har/(bohr**2*u))), T_vals")
+				top.write_plot_data(self.data_path + f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}_kc_xy={self.scatter_dict["k_xy"]}.dat", (self.w, self.T), "w (sqrt(har/(bohr**2*u))), T_vals")
 			except KeyError as e:
-				top.write_plot_data(self.data_path + f"/PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_kc={self.scatter_dict["k_x"]}.dat", (self.w, self.T), "w (sqrt(har/(bohr**2*u))), T_vals")
-			#top.write_plot_data(self.data_path + f"/debye.dat", (self.w, self.T), "w (sqrt(har/(bohr**2*u))), T_vals")
+				top.write_plot_data(self.data_path + f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}.dat", (self.w, self.T), "w (sqrt(har/(bohr**2*u))), T_vals")
+			#top.write_plot_data(self.data_path + f"/debye.dat", (w_filtered, T_filtered), "w (sqrt(har/(bohr**2*u))), T_vals")
 			top.write_plot_data(self.data_path + "/kappa.dat", (self.temperature, self.kappa), "T (K), kappa (pW/K)")
 
 		print(f'TauMax = {max(self.T)}, TauMin = {min(self.T)}, T_0 = {self.T[0]}')
 		print(f'KappaMax = {max(self.kappa)}, KappaMin = {min(self.kappa)}')
+		print(f'Filtered out {len(self.T) - len(T_filtered)} data points with extreme transmission values due to numerics')
+		
 		#print(max(self.E), min(self.E))
 		#fig, (ax1, ax2) = plt.subplots(2, 1)
 		fig, ax1 = plt.subplots(1, 1)
 		fig.tight_layout()
 		#ax1.plot(self.E, self.T)
-		ax1.plot(self.w, self.T)
+		ax1.plot(w_filtered, T_filtered)
+		#ax1.plot(self.w, self.T)
 		#ax1.set_yscale('log')
 		ax1.set_xlabel(r'Phonon Energy ($\mathrm{meV}$)', fontsize=12, fontproperties=prop)
 		ax1.set_ylabel(r'$\tau_{\mathrm{ph}}$', fontsize=12, fontproperties=prop)
@@ -625,9 +660,9 @@ class PhononTransport:
 		plt.yticks(fontproperties=prop)
   
 		try:
-			plt.savefig(self.data_path + f"/PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}_kc_xy={self.scatter_dict["k_xy"]}.pdf", bbox_inches='tight')
+			plt.savefig(self.data_path + f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}_kc_xy={self.scatter_dict["k_xy"]}.pdf", bbox_inches='tight')
 		except KeyError as e:
-			plt.savefig(self.data_path + f"/PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}.pdf", bbox_inches='tight')
+			plt.savefig(self.data_path + f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}.pdf", bbox_inches='tight')
 		#plt.savefig(self.data_path + f"/debye.pdf", bbox_inches='tight')
 		plt.clf()
 
@@ -642,14 +677,14 @@ class PhononTransport:
 		dos_R = self.electrode_R.dos
 		dos_real_R = self.electrode_R.dos_real
   
-		print(f'DOS Left electrode: {max(dos_L)}, {min(dos_L)}')
-		print(f'DOS Right electrode: {max(dos_R)}, {min(dos_R)}')
+		print(f'DOS Left electrode max/min: {max(dos_L)}, {min(dos_L)}')
+		print(f'DOS Right electrode max/min: {max(dos_R)}, {min(dos_R)}')
   
 		if write_data:
 			try:
-				top.write_plot_data(self.data_path + f"/PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_kc={self.scatter_dict["k_x"]}_kc_xy={self.scatter_dict["k_xy"]}_DOS.dat", (self.w, dos_L, dos_real_L, dos_R, dos_real_R), "w (sqrt(har/(bohr**2*u))), DOS_L (a.u.), DOS_L_real (a.u.), DOS_R (a.u.), DOS_R_real (a.u.)")
+				top.write_plot_data(self.data_path + f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_kc={self.scatter_dict["k_x"]}_kc_xy={self.scatter_dict["k_xy"]}_DOS.dat", (self.w, dos_L, dos_real_L, dos_R, dos_real_R), "w (sqrt(har/(bohr**2*u))), DOS_L (a.u.), DOS_L_real (a.u.), DOS_R (a.u.), DOS_R_real (a.u.)")
 			except KeyError as e:	
-				top.write_plot_data(self.data_path + f"/PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_kc={self.scatter_dict["k_x"]}_DOS.dat", (self.w, dos_L, dos_real_L, dos_R, dos_real_R), "w (sqrt(har/(bohr**2*u))), DOS_L (a.u.), DOS_L_real (a.u.), DOS_R (a.u.), DOS_R_real (a.u.)")
+				top.write_plot_data(self.data_path + f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_kc={self.scatter_dict["k_x"]}_DOS.dat", (self.w, dos_L, dos_real_L, dos_R, dos_real_R), "w (sqrt(har/(bohr**2*u))), DOS_L (a.u.), DOS_L_real (a.u.), DOS_R (a.u.), DOS_R_real (a.u.)")
 
 		fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
 		fig.tight_layout()
@@ -685,9 +720,9 @@ class PhononTransport:
 		plt.yticks(fontproperties=prop)'''
 
 		try:
-			plt.savefig(self.data_path + f"/PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}_kc_xy={self.scatter_dict["k_xy"]}_DOS.pdf", bbox_inches='tight')
+			plt.savefig(self.data_path + f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}_kc_xy={self.scatter_dict["k_xy"]}_DOS.pdf", bbox_inches='tight')
 		except KeyError as e:
-			plt.savefig(self.data_path + f"/PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}_DOS.pdf", bbox_inches='tight')
+			plt.savefig(self.data_path + f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}_DOS.pdf", bbox_inches='tight')
 
 if __name__ == '__main__':
 
@@ -708,10 +743,14 @@ if __name__ == '__main__':
                 
                 if electrode == "ELECTRODE_L":
                     electrode_dict_L = params
+                    electrode_dict_L["left"] = True
+                    electrode_dict_L["right"] = False
                     electrode_dict_L["type"] = electrode_type
                     
                 elif electrode == "ELECTRODE_R":
                     electrode_dict_R = params
+                    electrode_dict_R["left"] = False
+                    electrode_dict_R["right"] = True
                     electrode_dict_R["type"] = electrode_type
 
     if not (electrode_dict_L and electrode_dict_R):
@@ -730,6 +769,7 @@ if __name__ == '__main__':
 
     # General parameters
     data_path = config["CALCULATION"]["data_path"]
+    sys_descr = config["CALCULATION"]["sys_descr"]
     E_D = config["CALCULATION"]["E_D"]
     M_L = config["CALCULATION"]["M_L"]
     M_R = config["CALCULATION"]["M_R"]
@@ -742,6 +782,7 @@ if __name__ == '__main__':
     # Initialize PhononTransort class object
     PT = PhononTransport(
         data_path = data_path,
+        sys_descr = sys_descr,
         electrode_dict_L = electrode_dict_L,
 		electrode_dict_R = electrode_dict_R,
         scatter_dict = scatter_dict,
