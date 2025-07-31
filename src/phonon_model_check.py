@@ -43,8 +43,35 @@ def calculate_coupled_sfg(E, k_x, k_y, k_xy, eps = 1E-9, eta = 1E-9, model = "1D
         return g_0
 
 
+    if model == "2y_2y2x_2y": 
 
-    if model != "3_2_config":
+        H_00 = np.array(
+            [[k_x, k_xy, 0, 0],
+            [k_xy, k_y, 0, -k_y],
+            [0, 0, k_x, k_xy],
+            [0, -k_y, k_xy, k_y]]
+        )
+
+        H_NN = np.array(
+            [[2*k_x, 2*k_xy, 0, 0],
+            [2*k_xy, k_y, 0, -k_y],
+            [0, 0, 2*k_x, 2*k_xy],
+            [0, -k_y, 2*k_xy, k_y]]
+        )
+
+        H_01 = np.array(
+            [[-k_x, 0, 0, -k_xy],
+            [0, 0, -k_xy, 0],
+            [0, -k_xy, -k_x, 0],
+            [-k_xy, 0, 0, 0]]
+        )
+    
+    elif model == "1Dchain2D":
+        H_00 = np.array([[k_x, 0], [0, 0]], dtype=complex)
+        H_NN = np.array([[2*k_x, 0], [0, 0]], dtype=complex)
+        H_01 = np.array([[-k_x, 0], [0, 0]], dtype=complex)
+
+    elif model != "3_2_config":
         H_00 = np.array([[k_x]], dtype=complex)
         H_NN = np.array([[2*k_x]], dtype=complex)
         H_01 = np.array([[-k_x]], dtype=complex)
@@ -84,9 +111,20 @@ def calculate_coupled_sfg(E, k_x, k_y, k_xy, eps = 1E-9, eta = 1E-9, model = "1D
     g_0 = np.array(list(g_0))
 
 
+    if model == "2y_2y2x_2y":
+        delta = np.array([[-k_x, -k_xy, 0, 0],
+                          [-k_xy, 0, 0, 0],
+                          [0, 0, -k_x, -k_xy],
+                          [0, 0, -k_xy, 0]])
+    
+    elif model == "1Dchain2D":
+        delta = np.array([[-k_x, 0],
+                          [0, 0]])
+    
 
-    if model != "3_2_config":
+    elif model != "3_2_config":
         delta = np.array([[-k_x]])
+
     else:
         delta = np.array([[0, -k_xy, 0, 0, 0, 0],
                           [-k_xy, 0, 0, 0, 0, 0],
@@ -98,21 +136,31 @@ def calculate_coupled_sfg(E, k_x, k_y, k_xy, eps = 1E-9, eta = 1E-9, model = "1D
     #be aware of jans definition in equation 2.82 -> sign
     g_0 = np.linalg.inv(np.identity(H_00.shape[0])+g_0@delta)@g_0
 
-
+    '''elif model == "1Dchain2D":
+        delta = np.array([[-k_x, 0],
+                          [0, 0]])'''
 
 
 
     return g_0
 
-def calculate_Sigma(d, k_x, model = "1Dchain"):
+def calculate_Sigma(d_l, d_r, k_x, k_xy, model_l = "1Dchain", model_r = "1Dchain"):
     #shape (3+2)*2 x (3*2) -> 3: electrode y dimension, 2: center part dimension
 
-    if model == "1Dchain_single_site":
+    if model_l == "1Dchain_single_site":
         K_LC = np.array([[-k_x]])
-    elif model == "1Dchain_2_sites":
+
+    elif model_l == "2y_2y2x_2y":
+        K_LC = np.array([[-k_x, 0, 0, -k_xy, 0, 0, 0, 0],
+                         [0, 0, -k_xy, 0, 0, 0, 0, 0],
+                         [0, -k_xy, -k_x, 0, 0, 0, 0, 0],
+                         [-k_xy, 0, 0, 0, 0, 0, 0, 0]])
+
+    elif model_l == "1Dchain_2_sites":
         print("Using 1Dchain2 model")
         K_LC = np.array([[-k_x, 0]])
-    elif model == "3_2_config":
+        
+    elif model_l == "3_2_config":
         K_LC = np.array([[0, -k_xy, 0, 0],  # 0 x
                          [-k_xy, 0, 0, 0],  # 0 y
                          [-k_x, 0, 0, 0],  # 1 x
@@ -122,14 +170,26 @@ def calculate_Sigma(d, k_x, model = "1Dchain"):
         
 
     K_CL = np.transpose(np.conj(K_LC))
-    Pi_l =  np.matmul(K_CL[None, :, :], d)
+    Pi_l =  np.matmul(K_CL[None, :, :], d_l)
     Pi_l = np.matmul(Pi_l, np.transpose(np.conj(K_CL))[None, :, :])
 
-    if model == "1Dchain_single_site":
+    if model_r == "1Dchain_single_site":
         K_RC = np.array([[-k_x]])
-    elif model == "1Dchain_2_sites":
+    
+    elif model_r == "1Dchain_2_sites":
         K_RC = np.array([[0, -k_x]])
-    elif model == "3_2_config":
+
+    elif model_r == "1Dchain2D":
+        K_RC = np.array([[0, 0, -k_x, 0],
+                         [0, 0, 0, 0]])
+                         
+
+    elif model_r == "2y_2y2x_2y":
+        K_RC = np.array([[0, 0, 0, 0, -k_x, 0, 0, -k_xy],
+                         [0, 0, 0, 0, 0, 0, -k_xy, 0],
+                         [0, 0, 0, 0, 0, -k_xy, -k_x, 0],
+                         [0, 0, 0, 0, -k_xy, 0, 0, 0]])
+    elif model_r == "3_2_config":
         K_RC = np.array([[0, 0, 0, -k_xy],  # 0 x
                          [0, 0, -k_xy, 0],  # 0 y
                          [0, 0, -k_x, 0],  # 1 x
@@ -137,14 +197,14 @@ def calculate_Sigma(d, k_x, model = "1Dchain"):
                          [0, 0, 0, -k_xy],  # 2 x
                          [0, 0, -k_xy, 0]])  # 2 y
         
-
+    
     K_CR = np.transpose(np.conj(K_RC))
-    Pi_r =  np.matmul(K_CR[None, :, :], d)
+    Pi_r =  np.matmul(K_CR[None, :, :], d_r)
     Pi_r = np.matmul(Pi_r, np.transpose(np.conj(K_CR))[None, :, :])
 
     return Pi_l, Pi_r
 
-def calculate_G_CC(E, Sigma_l, Sigma_r, k_x, k_y, eta=1E-9, model = "1Dchain"):
+def calculate_G_CC(E, Sigma_l, Sigma_r, k_x, k_y, k_xy, eta=1E-9, model = "1Dchain"):
 
     if model == "1Dchain_single_site":
         K_CC = np.array([[2*k_x]])
@@ -152,6 +212,18 @@ def calculate_G_CC(E, Sigma_l, Sigma_r, k_x, k_y, eta=1E-9, model = "1Dchain"):
         print("Using 1Dchain2 model")
         K_CC = np.array([[2*k_x, -k_x],
                          [-k_x, 2*k_x]])
+
+    elif model == "2y_2y2x_2y":
+        #8x8 matrix
+        K_CC = np.array([[2*k_x, 2*k_xy, 0, 0, -k_x, 0, 0, -k_xy],
+                         [2*k_xy, k_y, 0, -k_y, 0, 0, -k_xy, 0],
+                         [0, 0, 2*k_x, 2*k_xy, 0, -k_xy, -k_x, 0],
+                         [0, -k_y, 2*k_xy, k_y, -k_xy, 0, 0, 0],
+                         [-k_x, 0, 0, -k_xy, 2*k_x, 2*k_xy, 0, 0],
+                         [0, 0, -k_xy, 0, 2*k_xy, k_y, 0, -k_y],
+                         [0, -k_xy, -k_x, 0, 0, 0, 2*k_x, 2*k_xy],
+                         [-k_xy, 0, 0, 0, 0, -k_y, 2*k_xy, k_y]])
+                         
     elif model == "3_2_config":
         K_CC = np.array([[2 * k_x, 2*k_xy, -k_x, 0],
                          [2*k_xy, 0, 0, 0],
@@ -183,36 +255,46 @@ if __name__ == '__main__':
     k_x = 100
     k_y = 100
     k_xy = 20
-    E = np.linspace(1E-3, 25, 500)
+    E = np.linspace(1E-3, 25, 1000)
     #model = "1Dchain_single_site"
     #model = "1Dchain_2_sites"
-    model = "3_2_config"
+    #model = "3_2_config"
+    #model = "2y_2y2x_2y"
+    model_r = "1Dchain2D"
+    model_l = "3_2_config"
 
-    d = calculate_coupled_sfg(E, k_x, k_y, k_xy, model = model)
 
-    dos = (-1/np.pi)*np.imag(np.trace(d, axis1=1, axis2=2))
-    dos_real = np.real(np.trace(d, axis1=1, axis2=2))
 
-    plt.plot(E, dos)
+    #d = calculate_coupled_sfg(E, k_x, k_y, k_xy, model = model)
+
+    d_r = calculate_coupled_sfg(E, k_x, k_y, k_xy, model = model_r)
+    d_l = calculate_coupled_sfg(E, k_x, k_y, k_xy, model = model_l)
+
+    #dos = (-1/np.pi)*np.imag(np.trace(d, axis1=1, axis2=2))
+    #dos_real = np.real(np.trace(d, axis1=1, axis2=2))
+
+    '''plt.plot(E, dos)
     plt.plot(E, dos_real)
     plt.plot(E, dos_real, label="real part")
     plt.plot(E, dos, label="dos")
-    plt.legend()
+    plt.legend()'''
     #plt.savefig(r'C:\Users\sevke\Desktop\Dev\MA\phonokit\src\plot\phonon_model_check_DOS.pdf', bbox_inches='tight')
     #plt.show()
     #plt.clf()
 
     #"""
-    Sigma_l, Sigma_r = calculate_Sigma(d, k_x, model = model)
+    #Sigma_l, Sigma_r = calculate_Sigma(d, k_x, k_xy, model = model)
+    Sigma_l, Sigma_r = calculate_Sigma(d_l, d_r, k_x, k_xy, model_l = model_l, model_r = model_r)
     Pi_l = -2 * np.imag(Sigma_l)
     Pi_r = -2 * np.imag(Sigma_r)
 
-    G_CC = calculate_G_CC(E, Sigma_l, Sigma_r, k_x, k_y, model = model)
+    #G_CC = calculate_G_CC(E, Sigma_l, Sigma_r, k_x, k_y, k_xy, model = model)
+    G_CC = calculate_G_CC(E, Sigma_l, Sigma_r, k_x, k_y, k_xy, model = model_l)
 
     tau = np.trace(np.matmul(np.matmul(G_CC, Pi_l), np.matmul(np.conj(np.transpose(G_CC, axes=(0,2,1))), Pi_r)), axis1=1, axis2=2)
 
     plt.plot(E, np.real(tau))
-    plt.ylim(0,1.5)
+    plt.ylim(0,4)
     #plt.savefig(r'C:\Users\sevke\Desktop\Dev\MA\phonokit\src\plot\phonon_model_check.pdf', bbox_inches='tight')
     plt.show()
 

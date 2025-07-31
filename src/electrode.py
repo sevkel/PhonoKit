@@ -66,6 +66,7 @@ class DebeyeModel(Electrode):
         self.g0 = self.calculate_g0(w, w_D)
         self.g = self.calculate_g(self.g0)[0]
         self.dos, self.dos_real = self.calculate_g(self.g0)[1], self.calculate_g(self.g0)[2]
+        self.dos_cpld, self.dos_real_cpld = self.calculate_g(self.g0)[3], self.calculate_g(self.g0)[4]
 
         assert isinstance(self.k_c, (int, float)), "In the Debeye model k_c must be a single numeric value (int or float), not an array."
         
@@ -130,7 +131,11 @@ class DebeyeModel(Electrode):
         dos = (-1 / np.pi) * np.imag(g_0)
         dos_real = np.real(g_0)
         
-        return g, dos, dos_real
+        dos_cpld = (-1 / np.pi) * np.imag(g)
+        dos_real_cpld = np.real(g)
+
+
+        return g, dos, dos_real, dos_cpld, dos_real_cpld
 
 class Chain1D(Electrode):
     """
@@ -145,6 +150,7 @@ class Chain1D(Electrode):
         self.g0 = self.calculate_g0()
         self.g = self.calculate_g(self.g0)
         self.dos, self.dos_real = self.calculate_g(self.g0)[1], self.calculate_g(self.g0)[2]
+        self.dos_cpld, self.dos_real_cpld = self.calculate_g(self.g0)[3], self.calculate_g(self.g0)[4]
         
 
     def ranged_force_constant(self):
@@ -199,8 +205,11 @@ class Chain1D(Electrode):
         
         dos = (-1 / np.pi) * np.imag(g0)
         dos_real = np.real(g0)
+        
+        dos_cpld = (-1 / np.pi) * np.imag(g)
+        dos_real_cpld = np.real(g)
 
-        return g, dos, dos_real
+        return g, dos, dos_real, dos_cpld, dos_real_cpld
     
 class Ribbon2D(Electrode):
     """
@@ -222,6 +231,7 @@ class Ribbon2D(Electrode):
         self.g0, self.H_01 = self.calculate_g0() #H_01 only needed if N_y == N_y_scatter
         self.g = self.calculate_g(self.g0, self.H_01)[0]
         self.dos, self.dos_real = self.calculate_g(self.g0, self.H_01)[3], self.calculate_g(self.g0, self.H_01)[4]
+        self.dos_cpld, self.dos_real_cpld = self.calculate_g(self.g0, self.H_01)[5], self.calculate_g(self.g0, self.H_01)[6]
         self.k_lc_LL = self.calculate_g(self.g0, self.H_01)[1]
         self.direct_interaction = self.calculate_g(self.g0, self.H_01)[2]
 
@@ -884,26 +894,17 @@ class Ribbon2D(Electrode):
             k_lc_LL[l * interaction_layers_dict[l].shape[0]: l * interaction_layers_dict[l].shape[0] + interaction_layers_dict[l].shape[0], \
                 l * interaction_layers_dict[l].shape[0]: l * interaction_layers_dict[l].shape[0] + interaction_layers_dict[l].shape[0]] = interaction_layers_dict[interaction_range - 1 - l]
             
-        """if self.left == False and self.right == True and interaction_range > 1:
             
-            mid_row = k_lc_LL.shape[0] // 2
-            mid_col = k_lc_LL.shape[1] // 2
-            
-            temp = k_lc_LL[:mid_row, :mid_col].copy()
-            
-            k_lc_LL[:mid_row, :mid_col] = k_lc_LL[mid_row:, mid_col:]
-            k_lc_LL[mid_row:, mid_col:] = temp"""
-            
-            
-            
-        #g = map(lambda x: np.dot(x, np.linalg.inv(np.identity(x.shape[0]) + np.dot(k_lc_LL, x))), g_0)
         g = map(lambda x: np.dot(np.linalg.inv(np.identity(x.shape[0]) + np.dot(x, k_lc_LL)), x), g_0)
         g = np.array([item for item in g])
         
         dos = (-1 / np.pi) * np.imag(np.trace(g_0, axis1=1, axis2=2))
         dos_real = np.real(np.trace(g_0, axis1=1, axis2=2))
         
-        return g, k_lc_LL, direct_interaction, dos, dos_real
+        dos_cpld = (-1 / np.pi) * np.imag(np.trace(g, axis1=1, axis2=2))
+        dos_real_cpld = np.real(np.trace(g, axis1=1, axis2=2))
+        
+        return g, k_lc_LL, direct_interaction, dos, dos_real, dos_cpld, dos_real_cpld
 
 class InfiniteFourier2D(Electrode):
     """

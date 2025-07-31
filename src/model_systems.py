@@ -83,11 +83,12 @@ class Chain1D(Model):
                 if i - j - 1 >= 0:
                     hessian[i, i - j - 1] = -all_k_c_x[j][1]  
             
-            hessian[i, i] = -np.sum(hessian[i, :]) #+ sum(all_k_c[k][1] for k in range(self.interaction_range) if atomnr - self.interaction_range <= 0)
+            hessian[i, i] = -np.sum(hessian[i, :]) #hessian[i, i] = -np.sum(hessian[i, :]) #+ sum(all_k_c[k][1] for k in range(self.interaction_range) if atomnr - self.interaction_range <= 0)
             
             # left side
-            if atomnr - self.interaction_range < 0:
+            if atomnr - self.interaction_range <= 0:
                 hessian[i, i] += sum(all_k_l_x[k][1] for k in range(self.interaction_range) if atomnr - (k + 1) <= 0)
+
             
             # middle atom within interaction range
             elif atomnr - self.interaction_range == 0 and atomnr + self.interaction_range >= self.N:
@@ -101,6 +102,8 @@ class Chain1D(Model):
             # right side
             elif atomnr + self.interaction_range > self.N:
                 hessian[i, i] += sum(all_k_r_x[k][1] for k in range(self.interaction_range) if atomnr + (k + 1) > self.N)
+
+            
 
         #assert np.sum(hessian) == 0, "Acoustic sum rule fullfilled! Check the initialization of the hessian"
         return hessian
@@ -646,7 +649,7 @@ if __name__ == '__main__':
 
     #TODO: Doesn't work for interaction_range > N_x // 2 --> Fix this
     junction2D = FiniteLattice2D(N_y=2, N_x=4, N_y_el_L=2, N_y_el_R=2, k_l_x=900, k_c_x=450, k_r_x=900, k_c_y=450, k_c_xy=180, k_l_xy=180, k_r_xy=180, interaction_range=2)
-    junction1D = Chain1D(interact_potential="reciproke_squared", interaction_range=1, lattice_constant=3.0, atom_type="Au", k_c=900, k_l=900, k_r=900, N=2)
+    junction1D = Chain1D(interact_potential="reciproke_squared", interaction_range=2, lattice_constant=3.0, atom_type="Au", k_c=900, k_l=900, k_r=900, N=4)
     print('debugging')
 
 

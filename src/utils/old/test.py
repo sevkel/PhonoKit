@@ -23,6 +23,97 @@ def ranged_force_constant(lattice_constant, k_x, k_y, k_xy, k_c, k_c_xy, interac
         
     return all_k_x, all_k_y, all_k_xy, all_k_c_x, all_k_c_xy
 
+def lagrangian(K, dimension=3):
+    '''
+    Same but with np.einsum
+    '''
+    def extract_displacement_modes(K, dim=dimension):
+
+        thresh = -1E-9
+        
+        eigenvalues, eigenvectors = np.linalg.eigh(K)  # eigh für symmetrische K
+        sorted_indices = list()
+        for i, eigval in enumerate(eigenvalues):
+            if eigval > thresh:
+                sorted_indices.append(i)
+
+        if dim == 3:
+            R = eigenvectors[:, sorted_indices[:6]].T
+        elif dim == 2:
+            R = eigenvectors[:, sorted_indices[:4]].T
+        elif dim == 1:
+            R = eigenvectors[:, sorted_indices[:1]].T 
+
+        return R
+    
+    def calculate_B(K, R):
+
+        n_constraints, n_rows = R.shape
+        
+        # Initialisiere B mit der richtigen Form
+        B = np.zeros((n_constraints, n_constraints, n_rows, n_rows))
+        
+        # Berechne term1 effizient mit np.einsum
+        term1 = 0.25 * np.einsum('ik,mk,nk->mni', K**2, R, R)
+        
+        # Berechne term2 effizient mit np.einsum
+        term2 = 0.25 * np.einsum('ij,mi,nj->mnij', K**2, R, R)
+        
+        # Setze die Werte in B
+        B += np.einsum('mni,ij->mnij', term1, np.eye(n_rows))  # Diagonalbeitrag von term1
+        B += term2  # term2 direkt hinzufügen
+
+        return B
+    
+    def calculate_a(K, R):
+
+        n_constraints, n = R.shape
+        
+        # Berechne a effizient mit np.einsum
+        a = -np.einsum('ij,mj->mi', K, R)
+
+        return a
+    
+    def solve_lagrange_multipliers(B, a):
+        
+        n_constraints, n_rows = a.shape  # (6,36)
+        
+        # Reshape B zu einer (n_constraints * n_rows) x (n_constraints * n_rows) Matrix
+        B_full = B.transpose(0, 2, 1, 3).reshape(n_constraints * n_rows, n_constraints * n_rows)
+        
+        # Reshape a zu einem Vektor der Länge (n_constraints * n_rows)
+        a_full = a.reshape(n_constraints * n_rows)
+        
+        try:
+            # Lösen des Gleichungssystems
+            lambda_full = np.linalg.solve(B_full, a_full)
+        except np.linalg.LinAlgError as e:
+            print("Singular matrix: {}".format(e))
+            # try a regularization
+            lambda_full = np.linalg.solve(B_full + 1e-8 * np.eye(B_full.shape[0]), a_full)
+            #lambda_full = np.linalg.pinv(B_full) @ a_full  # Verwende Pseudoinverse als Fallback
+        
+        # Zurück in (n_constraints, n_rows) Form bringen
+        lambda_reshaped = lambda_full.reshape(n_constraints, n_rows)
+
+        return lambda_reshaped
+    
+    def calculate_D(K, R, lambda_):
+    
+        # Berechne D effizient mit np.einsum
+        D = 0.25 * np.einsum('ij,mi,mj->ij', K**2, lambda_, R)
+        D += 0.25 * np.einsum('ij,mj,mi->ij', K**2, lambda_, R)
+
+        return D
+    
+    R = extract_displacement_modes(K, dimension)
+    B = calculate_B(K, R)
+    a = calculate_a(K, R)
+    lambda_ = solve_lagrange_multipliers(B, a)
+    D = calculate_D(K, R, lambda_)
+    
+    return K + D
+
 if __name__ == '__main__':
 
     lattice_constant = 3.0
@@ -38,439 +129,22 @@ if __name__ == '__main__':
 
     all_k_x, all_k_y, all_k_xy = ranged_force_constant(lattice_constant, k_x, k_y, k_xy, k_c, k_c_xy, interaction_range)[0:3]
 
-
-    hNN = np.zeros((2 * N_y * interaction_range, 2 * N_y * interaction_range))
-    #build Hessian matrix for the hNN principal bulklayer
-
-    for i in range(interaction_range):
-
-        for j in range(i * 2 * N_y, i * 2 * N_y + 2 * N_y):
-            
-            # diagonal elements x and xy coupling
-            if j % 2 == 0:
-                
-                # ii-coupling
-                hNN[j, j] = sum(2 * all_k_x[k][1] for k in range(len(all_k_x))) 
-
-                # ij-coupling
-                for k in range(interaction_range):
-                    if j + 2 * (k + 1) * N_y < hNN.shape[0]:                    
-                        hNN[j, j + 2 * (k + 1) * N_y] = -all_k_x[k][1]
-                    if j - 2 * (k + 1) * N_y >= 0:
-                        hNN[j, j - 2 * (k + 1) * N_y] = -all_k_x[k][1]
-
-                # xy-coupling
-                if j == 0 + i * 2 * N_y or j == i * 2 * N_y + 2 * N_y - 2:
-                    hNN[j, j + 1] = 2 * all_k_xy[0][1]
-                    hNN[j + 1, j] = 2 * all_k_xy[0][1]
-
-                if j != 0 + i * 2 * N_y and j != i * 2 * N_y + 2 * N_y - 2 and N_y > 2:
-                    hNN[j, j + 1] = 4 * all_k_xy[0][1]
-                    hNN[j + 1, j] = 4 * all_k_xy[0][1]
-                
-
-            else:
-                # y coupling in the coupling range -> edge layers
-                if (j == i * 2 * N_y + 1) or (j == i * 2 * N_y + 2 * N_y - 1): 
-                    
-                    # xy-coupling
-                    atomnr = np.ceil(float(j) / 2)
-
-                    if atomnr < N_y:#0 <= int(j - 1 + 2 * (atomnr + N_y + 1) - 1) < hNN.shape[1]:
-                        hNN[j - 1, int(j - 1 + 2 * (atomnr + N_y + 1) - 1)] = -all_k_xy[0][1]
-                        hNN[j, int(j - 1 + 2 * (atomnr + N_y + 1) - 2)] = -all_k_xy[0][1]
-
-                    elif atomnr ==  N_y:
-                        hNN[j - 1, int(2 * (atomnr + N_y - 1) - 1)] = -all_k_xy[0][1]
-                        hNN[j, int(2 * (atomnr + N_y - 1) - 2)] = -all_k_xy[0][1]
-
-                    elif atomnr > N_y:
-                        hNN[j, int(j - 1 - 2 * (atomnr - N_y + 1))] = -all_k_xy[0][1]
-                        hNN[j - 1, int(j - 1 - 2 * (atomnr - N_y + 1) + 1)] = -all_k_xy[0][1]
-
-
-                    hNN[j, j] = all_k_y[0][1]
-
-                    if j == 1 + i * 2 * N_y:
-                        hNN[j, j + 2] = -all_k_y[0][1]
-                    else:
-                        hNN[j, j - 2] = -all_k_y[0][1]
-
-                    if interaction_range >= N_y:
-                        for k in range(1, N_y - 1):
-                            hNN[j, j] += all_k_y[k][1]
-                            
-                            if j + 2 * (k + 1) < i * 2 * N_y + 2 * N_y:
-                                hNN[j, j + 2 * (k + 1)] = -all_k_y[k][1]
-                            if j - 2 * (k + 1) >= 0 + i * 2 * N_y:
-                                hNN[j, j - 2 * (k + 1)] = -all_k_y[k][1]
-
-                    else:
-                        for k in range(1, interaction_range):
-                            hNN[j, j] += all_k_y[k][1]
-                        
-                            if j + 2 * (k + 1) < i * 2 * N_y + 2 * N_y:
-                                hNN[j, j + 2 * (k + 1)] = -all_k_y[k][1]
-                            if j - 2 * (k + 1) >= 0 + i * 2 * N_y:
-                                hNN[j, j - 2 * (k + 1)] = -all_k_y[k][1]
-
-
-                else:
-                    
-                    atomnr = np.ceil(float(j) / 2)
-                    hNN[j, j] = 2 * all_k_y[0][1]
-                    
-                    # xy-coupling inner atom
-                    if atomnr < N_y and interaction_range > 1:
-                        ## first layer
-                        # first atom
-                        hNN[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
-                        hNN[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
-
-                        #second atom
-                        hNN[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
-                        hNN[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
-
-                    elif atomnr > i * N_y and (i + 1) * N_y == N_y * interaction_range:
-                        ## last layer
-                        # first atom
-                        hNN[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
-                        hNN[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
-
-                        # second atom
-                        hNN[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
-                        hNN[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
-                    
-                    elif atomnr > i * N_y and atomnr < (i + 1) * N_y and (i + 1) * N_y < N_y * interaction_range:
-                        ## layer before
-                        # first atom
-                        hNN[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
-                        hNN[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
-                        # second atom
-                        hNN[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
-                        hNN[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
-
-                        ## layer after
-                        # first atom
-                        hNN[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
-                        hNN[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
-                        # second atom
-                        hNN[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
-                        hNN[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
-
-                        
-
-                    if j + 2 < i * 2 * N_y + 2 * N_y:
-                        hNN[j, j + 2] = -all_k_y[0][1]
-                    if j - 2 >= 0 + i * 2 * N_y:
-                        hNN[j, j - 2] = -all_k_y[0][1]
-
-
-                    if interaction_range >= N_y:
-                        for k in range(1, N_y - 1):
-                            if atomnr - k - 1 > i * N_y and atomnr + k < i * N_y + N_y:
-                                hNN[j, j] += 2 * all_k_y[k][1]
-                                
-                            elif (atomnr - k - 1 <= i * N_y and atomnr + k < i * N_y + N_y) or (atomnr - k - 1 > i * N_y and atomnr + k >= i * N_y + N_y):
-                                print("atomnr: ", atomnr, k)
-                                hNN[j, j] += all_k_y[k][1]
-                            
-                            if j + 2 * (k + 1) < i * 2 * N_y + 2 * N_y:
-                                hNN[j, j + 2 * (k + 1)] = -all_k_y[k][1]
-                            if j - 2 * (k + 1) >= 0:
-                                hNN[j, j - 2 * (k + 1)] = -all_k_y[k][1]
-
-                    else:
-                        for k in range(1, interaction_range):
-                            if atomnr - k - 1 > 0 + i * 2 * N_y and atomnr + k < N_y * interaction_range:
-                                hNN[j, j] += 2 * all_k_y[k][1]
-                            elif (atomnr - k - 1 <= i * N_y and atomnr + k < i * N_y + N_y) or (atomnr - k - 1 > i * N_y and atomnr + k >= i * N_y + N_y):
-                                print("atomnr: ", atomnr, k)
-                                hNN[j, j] += all_k_y[k][1]
-                            
-                            if j + 2 * (k + 1) < i * 2 * N_y + 2 * N_y:
-                                hNN[j, j + 2 * (k + 1)] = -all_k_y[k][1]
-                            if j - 2 * (k + 1) >= 0 + i * 2 * N_y:
-                                hNN[j, j - 2 * (k + 1)] = -all_k_y[k][1]
-
-    print(hNN)
-
-
-    h00 = np.zeros((2 * N_y * interaction_range, 2 * N_y * interaction_range))
-    #build Hessian matrix for the h00 principal surface layer
-
-    for i in range(interaction_range):
-
-        for j in range(i * 2 * N_y, i * 2 * N_y + 2 * N_y):
-            
-            # diagonal elements x and xy coupling
-            if j % 2 == 0:
-
-                atomnr = np.ceil(float(j + 1) / 2)
-                
-                # ii-coupling
-                if atomnr <= N_y and interaction_range > 1:
-                    ## first layer
-                    h00[j, j] = sum(all_k_x[k][1] for k in range(len(all_k_x)))
-
-                elif atomnr > i * N_y and (i + 1) * N_y == N_y * interaction_range:
-                    ## last layer
-                    for k in range(interaction_range):
-                        if i - k > 0:
-                            h00[j, j] += 2 * all_k_x[k][1]
-                        else:
-                            h00[j, j] += all_k_x[k][1]
-                
-                elif atomnr > i * N_y and atomnr < (i + 1) * N_y and (i + 1) * N_y < N_y * interaction_range:
-                    for k in range(interaction_range):
-                        if i - k > 0:
-                            h00[j, j] += 2 * all_k_x[k][1]
-                        else:
-                            h00[j, j] += all_k_x[k][1]
-
-                # ij-coupling
-                for k in range(interaction_range):
-                    if j + 2 * (k + 1) * N_y < h00.shape[0]:                    
-                        h00[j, j + 2 * (k + 1) * N_y] = -all_k_x[k][1]
-                    if j - 2 * (k + 1) * N_y >= 0:
-                        h00[j, j - 2 * (k + 1) * N_y] = -all_k_x[k][1]
-
-                # xy-coupling
-                if j == 0 or j == 2 * N_y - 2:
-                    h00[j, j + 1] = all_k_xy[0][1]
-                    h00[j + 1, j] = all_k_xy[0][1]
-
-                elif j < 2 * N_y - 2:
-                    h00[j, j + 1] = 2 * all_k_xy[0][1]
-                    h00[j + 1, j] = 2 * all_k_xy[0][1]
-
-                elif (j == i * 2 * N_y or j == i * 2 * N_y + 2 * N_y - 2) and (j != 0 and j != 2 * N_y - 2):
-                    h00[j, j + 1] = 2 * all_k_xy[0][1]
-                    h00[j + 1, j] = 2 * all_k_xy[0][1]
-
-                elif j != 0 + i * 2 * N_y and j != i * 2 * N_y + 2 * N_y - 2 and N_y > 2:
-                    h00[j, j + 1] = 4 * all_k_xy[0][1]
-                    h00[j + 1, j] = 4 * all_k_xy[0][1]
-                
-
-            else:
-                # y coupling in the coupling range -> edge layers
-                if (j == i * 2 * N_y + 1) or (j == i * 2 * N_y + 2 * N_y - 1): 
-                    
-                    # xy-coupling
-                    atomnr = np.ceil(float(j) / 2)
-                    if atomnr < N_y:#0 <= int(j - 1 + 2 * (atomnr + N_y + 1) - 1) < hNN.shape[1]:
-                        h00[j - 1, int(j - 1 + 2 * (atomnr + N_y + 1) - 1)] = -all_k_xy[0][1]
-                        h00[j, int(j - 1 + 2 * (atomnr + N_y + 1) - 2)] = -all_k_xy[0][1]
-
-                    elif atomnr ==  N_y:
-                        h00[j - 1, int(2 * (atomnr + N_y - 1) - 1)] = -all_k_xy[0][1]
-                        h00[j, int(2 * (atomnr + N_y - 1) - 2)] = -all_k_xy[0][1]
-
-                    elif atomnr > N_y:
-                        h00[j, int(j - 1 - 2 * (atomnr - N_y + 1))] = -all_k_xy[0][1]
-                        h00[j - 1, int(j - 1 - 2 * (atomnr - N_y + 1) + 1)] = -all_k_xy[0][1]
-                    """if 0 <= int(j - 1 + 2 * (atomnr + N_y + 1) - 1) < h00.shape[1]:
-                        h00[j - 1, int(j - 1 + 2 * (atomnr + N_y + 1) - 1)] = -all_k_xy[0][1]
-                        h00[j, int(j - 1 + 2 * (atomnr + N_y + 1) - 2)] = -all_k_xy[0][1]
-                    elif atomnr - N_y >= 0:
-                        h00[j, int(j - 1 - 2 * (atomnr - N_y + 1))] = -all_k_xy[0][1]
-                        h00[j - 1, int(j - 1 - 2 * (atomnr - N_y + 1) + 1)] = -all_k_xy[0][1]"""
-
-
-                    h00[j, j] = all_k_y[0][1]
-
-                    if j == 1 + i * 2 * N_y:
-                        h00[j, j + 2] = -all_k_y[0][1]
-                    else:
-                        h00[j, j - 2] = -all_k_y[0][1]
-
-                    if interaction_range >= N_y:
-                        for k in range(1, N_y - 1):
-                            h00[j, j] += all_k_y[k][1]
-                            
-                            if j + 2 * (k + 1) < i * 2 * N_y + 2 * N_y:
-                                h00[j, j + 2 * (k + 1)] = -all_k_y[k][1]
-                            if j - 2 * (k + 1) >= 0 + i * 2 * N_y:
-                                h00[j, j - 2 * (k + 1)] = -all_k_y[k][1]
-
-                    else:
-                        for k in range(1, interaction_range):
-                            h00[j, j] += all_k_y[k][1]
-                        
-                            if j + 2 * (k + 1) < i * 2 * N_y + 2 * N_y:
-                                h00[j, j + 2 * (k + 1)] = -all_k_y[k][1]
-                            if j - 2 * (k + 1) >= 0 + i * 2 * N_y:
-                                h00[j, j - 2 * (k + 1)] = -all_k_y[k][1]
-
-
-                else:
-                    
-                    atomnr = np.ceil(float(j) / 2)
-                    h00[j, j] = 2 * all_k_y[0][1]
-                    
-                    # xy-coupling inner atom
-                    if atomnr < N_y and interaction_range > 1:
-                        ## first layer
-                        # first atom
-                        h00[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
-                        h00[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
-
-                        #second atom
-                        h00[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
-                        h00[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
-
-                    elif atomnr > i * N_y and (i + 1) * N_y == N_y * interaction_range:
-                        ## last layer
-                        # first atom
-                        h00[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
-                        h00[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
-
-                        # second atom
-                        h00[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
-                        h00[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
-                    
-                    elif atomnr > i * N_y and atomnr < (i + 1) * N_y and (i + 1) * N_y < N_y * interaction_range:
-                        ## layer before
-                        # first atom
-                        h00[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
-                        h00[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
-                        # second atom
-                        h00[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
-                        h00[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
-
-                        ## layer after
-                        # first atom
-                        h00[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
-                        h00[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
-                        # second atom
-                        h00[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
-                        h00[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
-
-                        
-
-                    if j + 2 < i * 2 * N_y + 2 * N_y:
-                        h00[j, j + 2] = -all_k_y[0][1]
-                    if j - 2 >= 0 + i * 2 * N_y:
-                        h00[j, j - 2] = -all_k_y[0][1]
-
-
-                    if interaction_range >= N_y:
-                        for k in range(1, N_y - 1):
-                            if atomnr - k - 1 > i * N_y and atomnr + k < i * N_y + N_y:
-                                h00[j, j] += 2 * all_k_y[k][1]
-                                
-                            elif (atomnr - k - 1 <= i * N_y and atomnr + k < i * N_y + N_y) or (atomnr - k - 1 > i * N_y and atomnr + k >= i * N_y + N_y):
-                                print("atomnr: ", atomnr, k)
-                                h00[j, j] += all_k_y[k][1]
-                            
-                            if j + 2 * (k + 1) < i * 2 * N_y + 2 * N_y:
-                                h00[j, j + 2 * (k + 1)] = -all_k_y[k][1]
-                            if j - 2 * (k + 1) >= 0:
-                                h00[j, j - 2 * (k + 1)] = -all_k_y[k][1]
-
-                    else:
-                        for k in range(1, interaction_range):
-                            if atomnr - k - 1 > 0 + i * 2 * N_y and atomnr + k < N_y * interaction_range:
-                                h00[j, j] += 2 * all_k_y[k][1]
-                            elif (atomnr - k - 1 <= i * N_y and atomnr + k < i * N_y + N_y) or (atomnr - k - 1 > i * N_y and atomnr + k >= i * N_y + N_y):
-                                print("atomnr: ", atomnr, k)
-                                h00[j, j] += all_k_y[k][1]
-                            
-                            if j + 2 * (k + 1) < i * 2 * N_y + 2 * N_y:
-                                h00[j, j + 2 * (k + 1)] = -all_k_y[k][1]
-                            if j - 2 * (k + 1) >= 0 + i * 2 * N_y:
-                                h00[j, j - 2 * (k + 1)] = -all_k_y[k][1]
-
-    print('\n', h00)
-            
-
-    h01 = np.zeros((2 * N_y * interaction_range, 2 * N_y * interaction_range))
-        #build Hessian matrix for the h01 interaction between principal layers
-
-    for i in range(interaction_range):
-
-        for j in range(i * 2 * N_y, i * 2 * N_y + 2 * N_y):
-            
-            # diagonal elements x and xy coupling
-            if j % 2 == 0:
-
-                atomnr = np.ceil(float(j + 1) / 2)
-
-                # ij-coupling
-                for k in range(interaction_range):
-                    if j + 2 * (k + 1) * N_y < h01.shape[0]:                    
-                        h01[j, j + 2 * (k + 1) * N_y] = -all_k_x[k][1]
-                    if j - 2 * (k + 1) * N_y >= 0:
-                        h01[j, j - 2 * (k + 1) * N_y] = -all_k_x[k][1]
-
-            else:
-                # y coupling in the coupling range -> edge layers
-                if (j == i * 2 * N_y + 1) or (j == i * 2 * N_y + 2 * N_y - 1): 
-                    
-                    # xy-coupling
-                    atomnr = np.ceil(float(j) / 2)
-
-                    if atomnr < N_y:#0 <= int(j - 1 + 2 * (atomnr + N_y + 1) - 1) < hNN.shape[1]:
-                        h01[j - 1, int(j - 1 + 2 * (atomnr + N_y + 1) - 1)] = -all_k_xy[0][1]
-                        h01[j, int(j - 1 + 2 * (atomnr + N_y + 1) - 2)] = -all_k_xy[0][1]
-
-                    elif atomnr ==  N_y:
-                        h01[j - 1, int(2 * (atomnr + N_y - 1) - 1)] = -all_k_xy[0][1]
-                        h01[j, int(2 * (atomnr + N_y - 1) - 2)] = -all_k_xy[0][1]
-
-                    elif atomnr > N_y:
-                        h01[j, int(j - 1 - 2 * (atomnr - N_y + 1))] = -all_k_xy[0][1]
-                        h01[j - 1, int(j - 1 - 2 * (atomnr - N_y + 1) + 1)] = -all_k_xy[0][1]
-
-                    """if 0 <= int(j - 1 + 2 * (atomnr + N_y + 1) - 1) < h01.shape[1]:
-                        h01[j - 1, int(j - 1 + 2 * (atomnr + N_y + 1) - 1)] = -all_k_xy[0][1]
-                        h01[j, int(j - 1 + 2 * (atomnr + N_y + 1) - 2)] = -all_k_xy[0][1]
-                    elif atomnr - N_y >= 0:
-                        h01[j, int(j - 1 - 2 * (atomnr - N_y + 1))] = -all_k_xy[0][1]
-                        h01[j - 1, int(j - 1 - 2 * (atomnr - N_y + 1) + 1)] = -all_k_xy[0][1]"""
-
-
-                else:
-                    
-                    atomnr = np.ceil(float(j) / 2)
-                    
-                    # xy-coupling inner atom
-                    if atomnr < N_y and interaction_range > 1:
-                        ## first layer
-                        # first atom
-                        h01[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
-                        h01[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
-
-                        #second atom
-                        h01[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
-                        h01[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
-
-                    elif atomnr > i * N_y and (i + 1) * N_y == N_y * interaction_range:
-                        ## last layer
-                        # first atom
-                        h01[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
-                        h01[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
-
-                        # second atom
-                        h01[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
-                        h01[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
-                    
-                    elif atomnr > i * N_y and atomnr < (i + 1) * N_y and (i + 1) * N_y < N_y * interaction_range:
-                        ## layer before
-                        # first atom
-                        h01[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
-                        h01[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
-                        # second atom
-                        h01[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
-                        h01[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
-
-                        ## layer after
-                        # first atom
-                        h01[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
-                        h01[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
-                        # second atom
-                        h01[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
-                        h01[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
-
-    print('\n', h01)
+    K_cc = np.array([[ 200,    0., -100.,    0.],
+				[   0.,    0.,    0.,    0.],
+				[-100.,    0.,  200,    0.],
+				[   0.,    0.,    0.,    0.]])
+    
+    # K_lc mit 20 atomen als elektrode, genauso K_rc
+    K_lc = np.array([[ 200,    0., -100.,    0.],
+                    [   0.,    0.,    0.,    0.],
+                    [-100.,    0.,  200,    0.],
+                    [   0.,    0.,    0.,    0.],
+                    [   0.,    0.,    0.,    0.]])
+    
+    '''K = np.array([[100, -95],
+                    [-95, 100]])'''
+    
+    Ktilde = lagrangian(K, dimension=2)
+
+    print("Ktilde:")
+    print(Ktilde)
