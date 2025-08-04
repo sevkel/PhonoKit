@@ -1,5 +1,5 @@
-import copy
-import os.path
+__docformat__ = "google"
+
 import sys
 import json
 from unicodedata import name
@@ -66,7 +66,6 @@ class PhononTransport:
 		#self.w = np.linspace(0, self.w_D * 1.1, N)
 		#self.E = self.w * const.unit2SI * const.h_bar * const.J2meV
 
-		#TODO did a change in starting point w here
 		self.w = np.linspace(1E-3, self.E_D * 1.1, N) #new
 		self.i = np.linspace(0, self.N, self.N, False, dtype=int)
 
@@ -81,7 +80,7 @@ class PhononTransport:
 		if (self.electrode_dict_L["type"], self.electrode_dict_R["type"], self.scatter_dict["type"]) not in [
 			("DebeyeModel", "DebeyeModel", "FiniteLattice2D"),
 			("DebeyeModel", "DebeyeModel", "Chain1D"),
-			("Ribbon2D", "Ribbon2D", "FiniteLattice2D"), #TODO: you can set it up to get a "2D" 1Dchain.
+			("Ribbon2D", "Ribbon2D", "FiniteLattice2D"), 
 			("Ribbon2D", "Ribbon2D", "Chain1D"),
 			("Chain1D", "Chain1D", "Chain1D"),
 			("InfiniteFourier2D", "InfiniteFourier2D", "FiniteLattice2D"),
@@ -586,6 +585,7 @@ class PhononTransport:
 		Returns:
 			T (np.ndarray): Transmission
 		"""
+
 		if self.electrode_dict_L["type"] == "Chain1D" and self.electrode_dict_R["type"] == "Chain1D" and scatter_dict["type"] == "Chain1D":
 			# 1D Chain transmission has an analytical expression
 			k_x_L = sum(self.electrode_L.ranged_force_constant()[0][i][1] for i in range(self.electrode_L.interaction_range))
@@ -602,6 +602,19 @@ class PhononTransport:
 				lambda_R[i, -1, -1] = g_E_R[i]
 
 			trans_prob_matrix = np.array(list(map(lambda i: np.dot(np.dot(self.g_CC_ret[i], lambda_L[i]), np.dot(self.g_CC_adv[i], lambda_R[i])), self.i)))
+
+			#TODO: HIER EIGENCHANNEL IMPLEMENTIEREN
+
+			eigvals, eigvecs = np.linalg.eig(trans_prob_matrix)
+
+			#sort eigenvalues and eigenvectors
+			sorted_indices = np.argsort(eigvals)
+			eigvals = eigvals[sorted_indices]
+			eigvecs = eigvecs[:, sorted_indices]
+
+
+
+
 			tau_ph = np.array(list(map(lambda i: np.real(np.trace(trans_prob_matrix[i])), self.i)))
 				
 			return tau_ph
@@ -668,7 +681,7 @@ class PhononTransport:
 			#ax1.plot(self.E, self.T)
 			ax1.plot(w_filtered, T_filtered)
 			#ax1.plot(self.w, self.T)
-			ax1.set_yscale('log')
+			#ax1.set_yscale('log')
 			ax1.set_xlabel(r'Phonon Energy ($\mathrm{meV}$)', fontsize=12, fontproperties=prop)
 			ax1.set_ylabel(r'$\tau_{\mathrm{ph}}$', fontsize=12, fontproperties=prop)
 			#ax1.axvline(self.w_D * const.unit2SI * const.h_bar / const.meV2J, ls="--", color="black")

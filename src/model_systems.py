@@ -191,7 +191,6 @@ class FiniteLattice2D(Model):
             Returns:
                 List of tuples: Contains combination of layer index from apart from the surface and its corresponding matrix as np.ndarray.
             """
-            #TODO: check for bulk layer adjustments for coupling via jan. Tho, hNN should be fine as interaction layers cover the coupling
 
             bulk_hessians = list()
             hNNtemplate = np.zeros((2 * self.N_y, 2 * self.N_y), dtype=float)
@@ -308,7 +307,6 @@ class FiniteLattice2D(Model):
             Returns:
                 List of tuples: Contains combination of layer index and its corresponding interaction matrix as np.ndarray.
             """
-            #TODO: adjust interaction layers for coupling
 
             interact_layer_list = list()
             h_interact_template = np.zeros((2 * self.N_y, 2 * self.N_y), dtype=float)

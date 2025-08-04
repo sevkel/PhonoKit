@@ -46,24 +46,24 @@ def calculate_coupled_sfg(E, k_x, k_y, k_xy, eps = 1E-9, eta = 1E-9, model = "1D
     if model == "2y_2y2x_2y": 
 
         H_00 = np.array(
-            [[k_x, k_xy, 0, 0],
-            [k_xy, k_y, 0, -k_y],
-            [0, 0, k_x, k_xy],
-            [0, -k_y, k_xy, k_y]]
+            [[k_x+k_xy, 0, 0, 0],
+            [0, k_y+k_xy, 0, -k_y],
+            [0, 0, k_x+k_xy, 0],
+            [0, -k_y, 0, k_y+k_xy]]
         )
 
         H_NN = np.array(
-            [[2*k_x, 2*k_xy, 0, 0],
-            [2*k_xy, k_y, 0, -k_y],
-            [0, 0, 2*k_x, 2*k_xy],
-            [0, -k_y, 2*k_xy, k_y]]
+            [[2*k_x+2*k_xy, 0, 0, 0],
+            [0, k_y+2*k_xy, 0, -k_y],
+            [0, 0, 2*k_x+2*k_xy, 0],
+            [0, -k_y, 0, k_y+2*k_xy]]
         )
 
         H_01 = np.array(
-            [[-k_x, 0, 0, -k_xy],
-            [0, 0, -k_xy, 0],
-            [0, -k_xy, -k_x, 0],
-            [-k_xy, 0, 0, 0]]
+            [[-k_x, 0, -k_xy, 0],
+            [0, 0, 0, -k_xy],
+            [-k_xy, 0, -k_x, 0],
+            [0, -k_xy, 0, 0]]
         )
     
     elif model == "1Dchain2D":
@@ -112,10 +112,10 @@ def calculate_coupled_sfg(E, k_x, k_y, k_xy, eps = 1E-9, eta = 1E-9, model = "1D
 
 
     if model == "2y_2y2x_2y":
-        delta = np.array([[-k_x, -k_xy, 0, 0],
-                          [-k_xy, 0, 0, 0],
-                          [0, 0, -k_x, -k_xy],
-                          [0, 0, -k_xy, 0]])
+        delta = np.array([[-k_x-k_xy, 0, 0, 0],
+                          [0, -k_xy, 0, 0],
+                          [0, 0, -k_x-k_xy, 0],
+                          [0, 0, 0, -k_xy]])
     
     elif model == "1Dchain2D":
         delta = np.array([[-k_x, 0],
@@ -151,10 +151,17 @@ def calculate_Sigma(d_l, d_r, k_x, k_xy, model_l = "1Dchain", model_r = "1Dchain
         K_LC = np.array([[-k_x]])
 
     elif model_l == "2y_2y2x_2y":
-        K_LC = np.array([[-k_x, 0, 0, -k_xy, 0, 0, 0, 0],
+
+        K_LC = np.array(
+            [[-k_x, 0, -k_xy, 0, 0, 0, 0, 0],
+            [0, 0, 0, -k_xy, 0, 0, 0, 0],
+            [-k_xy, 0, -k_x, 0, 0, 0, 0, 0],
+            [0, -k_xy, 0, 0, 0, 0, 0, 0]]
+        )
+        '''K_LC = np.array([[-k_x, 0, 0, -k_xy, 0, 0, 0, 0],
                          [0, 0, -k_xy, 0, 0, 0, 0, 0],
                          [0, -k_xy, -k_x, 0, 0, 0, 0, 0],
-                         [-k_xy, 0, 0, 0, 0, 0, 0, 0]])
+                         [-k_xy, 0, 0, 0, 0, 0, 0, 0]])'''
 
     elif model_l == "1Dchain_2_sites":
         print("Using 1Dchain2 model")
@@ -185,10 +192,17 @@ def calculate_Sigma(d_l, d_r, k_x, k_xy, model_l = "1Dchain", model_r = "1Dchain
                          
 
     elif model_r == "2y_2y2x_2y":
-        K_RC = np.array([[0, 0, 0, 0, -k_x, 0, 0, -k_xy],
+        K_RC = np.array(
+            [[0, 0, 0, 0, -k_x, 0, -k_xy, 0],
+            [0, 0, 0, 0,0, 0, 0, -k_xy],
+            [0, 0, 0, 0,-k_xy, 0, -k_x, 0],
+            [0, 0, 0, 0,0, -k_xy, 0, 0]]
+        )
+        
+        '''K_RC = np.array([[0, 0, 0, 0, -k_x, 0, 0, -k_xy],
                          [0, 0, 0, 0, 0, 0, -k_xy, 0],
                          [0, 0, 0, 0, 0, -k_xy, -k_x, 0],
-                         [0, 0, 0, 0, -k_xy, 0, 0, 0]])
+                         [0, 0, 0, 0, -k_xy, 0, 0, 0]])'''
     elif model_r == "3_2_config":
         K_RC = np.array([[0, 0, 0, -k_xy],  # 0 x
                          [0, 0, -k_xy, 0],  # 0 y
@@ -215,14 +229,42 @@ def calculate_G_CC(E, Sigma_l, Sigma_r, k_x, k_y, k_xy, eta=1E-9, model = "1Dcha
 
     elif model == "2y_2y2x_2y":
         #8x8 matrix
-        K_CC = np.array([[2*k_x, 2*k_xy, 0, 0, -k_x, 0, 0, -k_xy],
+        H_00_t = np.array(
+            [[k_x+k_xy, 0, 0, 0],
+            [0, k_y+k_xy, 0, -k_y],
+            [0, 0, k_x+k_xy, 0],
+            [0, -k_y, 0, k_y+k_xy]]
+        )
+
+        H_NN_t = np.array(
+            [[2*k_x+2*k_xy, 0, 0, 0],
+            [0, k_y+2*k_xy, 0, -k_y],
+            [0, 0, 2*k_x+2*k_xy, 0],
+            [0, -k_y, 0, k_y+2*k_xy]]
+        )
+
+        H_01_t = np.array(
+            [[-k_x, 0, -k_xy, 0],
+            [0, 0, 0, -k_xy],
+            [-k_xy, 0, -k_x, 0],
+            [0, -k_xy, 0, 0]]
+        )
+
+        K_CC = np.zeros((8, 8), dtype=complex)
+        K_CC[0:4, 0:4] = H_NN_t
+        K_CC[0:4, 4:8] = H_01_t
+        K_CC[4:8, 0:4] = H_01_t.T
+        K_CC[4:8, 4:8] = H_NN_t
+
+
+        '''K_CC = np.array([[2*k_x, 2*k_xy, 0, 0, -k_x, 0, 0, -k_xy],
                          [2*k_xy, k_y, 0, -k_y, 0, 0, -k_xy, 0],
                          [0, 0, 2*k_x, 2*k_xy, 0, -k_xy, -k_x, 0],
                          [0, -k_y, 2*k_xy, k_y, -k_xy, 0, 0, 0],
                          [-k_x, 0, 0, -k_xy, 2*k_x, 2*k_xy, 0, 0],
                          [0, 0, -k_xy, 0, 2*k_xy, k_y, 0, -k_y],
                          [0, -k_xy, -k_x, 0, 0, 0, 2*k_x, 2*k_xy],
-                         [-k_xy, 0, 0, 0, 0, -k_y, 2*k_xy, k_y]])
+                         [-k_xy, 0, 0, 0, 0, -k_y, 2*k_xy, k_y]])'''
                          
     elif model == "3_2_config":
         K_CC = np.array([[2 * k_x, 2*k_xy, -k_x, 0],
@@ -260,8 +302,8 @@ if __name__ == '__main__':
     #model = "1Dchain_2_sites"
     #model = "3_2_config"
     #model = "2y_2y2x_2y"
-    model_r = "1Dchain2D"
-    model_l = "3_2_config"
+    model_r = "2y_2y2x_2y"
+    model_l = "2y_2y2x_2y"
 
 
 

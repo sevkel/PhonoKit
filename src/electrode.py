@@ -126,7 +126,7 @@ class DebeyeModel(Electrode):
         Returns:
             g (np.ndarray)) Surface greens function coupled by dyson equation
         """
-        #TODO: Vorzeichen check
+        
         g = g_0 / (1 + self.k_c * g_0)
         dos = (-1 / np.pi) * np.imag(g_0)
         dos_real = np.real(g_0)
@@ -182,6 +182,7 @@ class Chain1D(Electrode):
         Returns:
             g0 (array_like): Surface greens function g0
         """
+        
         #TODO: is this really correct by summing k_x and k_c in that way?
         all_k_x = self.ranged_force_constant()[0]
         k_x = sum(k_x for _, k_x in all_k_x)
@@ -276,7 +277,7 @@ class Ribbon2D(Electrode):
             """
             Build up an actual bulk layer of the electrode. The coupling includes options for x, y and xy coupling. The coupling range is defined by the parameter interaction_range.
             """
-            #TODO: Hier Sachen auskommentiert
+            
             N_y = self.N_y
             interaction_range = self.interaction_range
 
@@ -336,9 +337,6 @@ class Ribbon2D(Electrode):
                                         hNN[j - 1, int(2 * (atomnr + N_y - 1) - 1)] = -all_k_xy[0][1]
                                         hNN[j, int(2 * (atomnr + N_y - 1) - 2)] = -all_k_xy[0][1]
 
-                                    # elif atomnr > N_y and interaction_range > 1:
-                                    #     hNN[j, int(j - 1 - 2 * (atomnr - N_y + 1))] = -all_k_xy[0][1]
-                                    #     hNN[j - 1, int(j - 1 - 2 * (atomnr - N_y + 1) + 1)] = -all_k_xy[0][1]
                                     
                                     elif atomnr > N_y and interaction_range > 1 and (atomnr == (i + 1) * N_y or atomnr == i * N_y + 1) and atomnr <= N_y * interaction_range - N_y:
                                         # N_y == 2 case
@@ -850,8 +848,6 @@ class Ribbon2D(Electrode):
             elif i == direct_interaction.shape[0] - 2:
                 direct_interaction[i, direct_interaction.shape[1] - 1] = -all_k_c_xy[0][1]
                 direct_interaction[i + 1, direct_interaction.shape[1] - 2] = -all_k_c_xy[0][1]
-
-        #TODO: get on the fly force constants between electrode and junction (or anything?)
 
         k_lc_LL = np.zeros((2 * N_y * interaction_range, 2 * N_y * interaction_range), dtype=float) 
         
