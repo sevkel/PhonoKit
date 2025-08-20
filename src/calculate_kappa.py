@@ -45,7 +45,7 @@ def calculate_kappa(tau_ph, E, T):
 
     beta = 1/(k_B*T)
     exp_ = np.exp(E*beta)
-    #can be replaced because contribution is zuro in integrand (limits of exp)
+    #can be replaced because contribution is zero in integrand (limits of exp)
     exp_[exp_ == inf] = 0
     integrand = E ** 2 * tau_ph * exp_ / ((exp_ - 1) ** 2)
 

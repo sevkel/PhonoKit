@@ -222,18 +222,18 @@ class FiniteLattice2D(Model):
 
                         # xy-coupling
                         if j == 0 or j == hNN.shape[0] - 2:
-                            hNN[j, j] += 2 * all_k_c_xy[0][1] 
-                            hNN[j + 1, j + 1] += 2 * all_k_c_xy[0][1]
+                            hNN[j, j + 1] = 2 * all_k_c_xy[0][1] 
+                            hNN[j + 1, j] = 2 * all_k_c_xy[0][1]
 
                         if j != 0 and j != hNN.shape[0] - 2 and self.N_y > 2:
-                            hNN[j, j] += 4 * all_k_c_xy[0][1]
-                            hNN[j + 1, j + 1] += 4 * all_k_c_xy[0][1]
+                            hNN[j, j + 1] = 4 * all_k_c_xy[0][1]
+                            hNN[j + 1, j] = 4 * all_k_c_xy[0][1]
                         
 
                     else:
                         # y coupling in the coupling range
                         if j == 1 or j == hNN.shape[0] - 1:
-                            hNN[j, j] = all_k_c_y[0][1] + 2 * all_k_c_xy[0][1]
+                            hNN[j, j] = all_k_c_y[0][1]
 
                             if j == 1:
                                 hNN[j, j + 2] = -all_k_c_y[0][1]
@@ -259,7 +259,7 @@ class FiniteLattice2D(Model):
                                         hNN[j, j - 2 * (k + 1)] = -all_k_c_y[k][1]
                             
                         else:
-                            hNN[j, j] += 2 * all_k_c_y[0][1] #s+ 4 * all_k_c_xy[0][1]
+                            hNN[j, j] = 2 * all_k_c_y[0][1]
                             
                             if j + 2 < hNN.shape[0]:
                                 hNN[j, j + 2] = -all_k_c_y[0][1]
@@ -324,18 +324,18 @@ class FiniteLattice2D(Model):
                         if i == 0:
                             # xy-coupling
                             if j == 0:
-                                h_interact[j, j + 2] += -all_k_c_xy[0][1]
-                                h_interact[j + 2, j] += -all_k_c_xy[0][1]
+                                h_interact[j, j + 3] = -all_k_c_xy[0][1]
+                                h_interact[j + 3, j] = -all_k_c_xy[0][1]
 
                             elif j == h_interact.shape[0] - 2:
-                                h_interact[j + 1, j - 1] += -all_k_c_xy[0][1]
-                                h_interact[j - 1, j + 1] += -all_k_c_xy[0][1]
+                                h_interact[j, j - 1] = -all_k_c_xy[0][1]
+                                h_interact[j - 1, j] = -all_k_c_xy[0][1]
 
                             else:
-                                h_interact[j, j + 2] += -all_k_c_xy[0][1]
-                                h_interact[j + 2, j] += -all_k_c_xy[0][1]
-                                h_interact[j + 1, j - 1] += -all_k_c_xy[0][1]
-                                h_interact[j - 1, j + 1] += -all_k_c_xy[0][1]
+                                h_interact[j, j + 3] = -all_k_c_xy[0][1]
+                                h_interact[j + 3, j] = -all_k_c_xy[0][1]
+                                h_interact[j, j - 1] = -all_k_c_xy[0][1]
+                                h_interact[j - 1, j] = -all_k_c_xy[0][1]
 
 
                 interact_layer_list.append((i, h_interact))
@@ -368,43 +368,43 @@ class FiniteLattice2D(Model):
 
                     if i == 0 or i == H_00.shape[0] - 2:
                         # xy coupling
-                        H_00[i, i] += all_k_c_xy[0][1]
-                        H_00[i + 1, i + 1] += all_k_c_xy[0][1]
+                        H_00[i, i + 1] = all_k_c_xy[0][1]
+                        H_00[i + 1, i] = all_k_c_xy[0][1]
 
                         if left == True and right == False:
                             if self.N_y == self.N_y_el_L:
-                                H_00[i, i] += all_k_l_xy[0][1]
-                                H_00[i + 1, i + 1] += all_k_l_xy[0][1]
+                                H_00[i, i + 1] += all_k_l_xy[0][1]
+                                H_00[i + 1, i] += all_k_l_xy[0][1]
                             else:
-                                H_00[i, i] += 2 * all_k_l_xy[0][1]
-                                H_00[i + 1, i + 1] += 2 * all_k_l_xy[0][1]
+                                H_00[i, i + 1] += 2 * all_k_l_xy[0][1]
+                                H_00[i + 1, i] += 2 * all_k_l_xy[0][1]
                         
                         elif right == True and left == False:
                             if self.N_y == self.N_y_el_R:
-                                H_00[i, i] += all_k_r_xy[0][1]
-                                H_00[i + 1, i + 1] += all_k_r_xy[0][1]
+                                H_00[i, i + 1] += all_k_r_xy[0][1]
+                                H_00[i + 1, i] += all_k_r_xy[0][1]
                             else:
-                                H_00[i, i] += 2 * all_k_r_xy[0][1]
-                                H_00[i + 1, i + 1] += 2 * all_k_r_xy[0][1]
+                                H_00[i, i + 1] += 2 * all_k_r_xy[0][1]
+                                H_00[i + 1, i] += 2 * all_k_r_xy[0][1]
 
                     else:
-                        H_00[i, i] += 2 * all_k_c_xy[0][1]
-                        H_00[i + 1, i + 1] += 2 * all_k_c_xy[0][1]
+                        H_00[i, i + 1] = 2 * all_k_c_xy[0][1]
+                        H_00[i + 1, i] = 2 * all_k_c_xy[0][1]
 
                         if left == True and right == False:
-                            H_00[i, i] += 2 * all_k_l_xy[0][1]
-                            H_00[i + 1, i + 1] += 2 * all_k_l_xy[0][1]
+                            H_00[i, i + 1] += 2 * all_k_l_xy[0][1]
+                            H_00[i + 1, i] += 2 * all_k_l_xy[0][1]
 
                         elif right == True and left == False:
-                            H_00[i, i] += 2 * all_k_r_xy[0][1]
-                            H_00[i + 1, i + 1] += 2 * all_k_r_xy[0][1]
+                            H_00[i, i + 1] += 2 * all_k_r_xy[0][1]
+                            H_00[i + 1, i] += 2 * all_k_r_xy[0][1]
 
                     
                 else:
                     # y coupling in the coupling range, first and last k_y, rest 2 * k_c_y
                     if i == 1 or i == H_00.shape[0] - 1:
 
-                        H_00[i, i] += all_k_c_y[0][1]
+                        H_00[i, i] = all_k_c_y[0][1]
                         if i == 1:
                             H_00[i, i + 2] = -all_k_c_y[0][1]
                         else:
@@ -429,7 +429,7 @@ class FiniteLattice2D(Model):
                                     H_00[i, i - 2 * (k + 1)] = -all_k_c_y[k][1]
                         
                     else:
-                        H_00[i, i] += 2 * all_k_c_y[0][1]
+                        H_00[i, i] = 2 * all_k_c_y[0][1]
                         
                         if i + 2 < H_00.shape[0]:
                             H_00[i, i + 2] = -all_k_c_y[0][1]
@@ -488,13 +488,13 @@ class FiniteLattice2D(Model):
                 
                 if atomnr == 1 or atomnr == self.N_x:
                     #xy coupling to the electrodes
-                    if atomnr == 1 and self.N_y_el_L > 1:   
-                        hessian[2 * i, 2 * i] += 2 * all_k_l_xy[0][1]
-                        hessian[2 * i + 1, 2 * i + 1] += 2 * all_k_l_xy[0][1]
+                    if atomnr == 1 and self.N_y_el_L > 0:   
+                        hessian[2 * i, 2 * i + 1] = 2 * all_k_l_xy[0][1]
+                        hessian[2 * i + 1, 2 * i] = 2 * all_k_l_xy[0][1]
                         
-                    elif atomnr == self.N_x and self.N_y_el_R > 1:
-                        hessian[2 * i, 2 * i] += 2 * all_k_r_xy[0][1]
-                        hessian[2 * i + 1, 2 * i + 1] += 2 * all_k_r_xy[0][1]
+                    elif atomnr == self.N_x and self.N_y_el_R > 0:
+                        hessian[2 * i, 2 * i + 1] = 2 * all_k_r_xy[0][1]
+                        hessian[2 * i + 1, 2 * i] = 2 * all_k_r_xy[0][1]
 
                 # left side
                 if atomnr - self.interaction_range <= 0:
@@ -646,7 +646,7 @@ class FiniteLattice2D(Model):
 if __name__ == '__main__':
 
     #TODO: Doesn't work for interaction_range > N_x // 2 --> Fix this
-    junction2D = FiniteLattice2D(N_y=1, N_x=2, N_y_el_L=3, N_y_el_R=1, k_l_x=900, k_c_x=900, k_r_x=900, k_c_y=900, k_c_xy=180, k_l_xy=180, k_r_xy=180, interaction_range=1)
+    junction2D = FiniteLattice2D(N_y=2, N_x=4, N_y_el_L=2, N_y_el_R=2, k_l_x=900, k_c_x=450, k_r_x=900, k_c_y=450, k_c_xy=180, k_l_xy=180, k_r_xy=180, interaction_range=2)
     junction1D = Chain1D(interact_potential="reciproke_squared", interaction_range=2, lattice_constant=3.0, atom_type="Au", k_c=900, k_l=900, k_r=900, N=4)
     print('debugging')
 

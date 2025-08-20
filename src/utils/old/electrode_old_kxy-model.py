@@ -297,7 +297,7 @@ class Ribbon2D(Electrode):
                         
                         # ii-coupling
                         hNN[j, j] = sum(2 * all_k_x[k][1] for k in range(len(all_k_x))) 
-
+            
 
                         for k in range(interaction_range):
                             if j + 2 * (k + 1) * N_y < hNN.shape[0]:                    
@@ -311,12 +311,12 @@ class Ribbon2D(Electrode):
                         if N_y > 1:
                             
                             if j == i * 2 * N_y or j == i * 2 * N_y + 2 * N_y - 2:
-                                hNN[j, j] += 2 * all_k_xy[0][1]
-                                hNN[j + 1, j + 1] += 2 * all_k_xy[0][1]
+                                hNN[j, j + 1] = 2 * all_k_xy[0][1]
+                                hNN[j + 1, j] = 2 * all_k_xy[0][1]
 
                             if j != 0 + i * 2 * N_y and j != i * 2 * N_y + 2 * N_y - 2 and N_y > 2:
-                                hNN[j, j] += 4 * all_k_xy[0][1]
-                                hNN[j + 1, j + 1] += 4 * all_k_xy[0][1]
+                                hNN[j, j + 1] = 4 * all_k_xy[0][1]
+                                hNN[j + 1, j] = 4 * all_k_xy[0][1]
                         
 
                     else:
@@ -330,40 +330,40 @@ class Ribbon2D(Electrode):
                                 if interaction_range > 1:
                                     
                                     if atomnr < N_y:# and interaction_range > 1:
-                                        hNN[j - 1, int(j - 1 + 2 * (atomnr + N_y + 1) - 2)] = -all_k_xy[0][1]
-                                        hNN[j, int(j - 1 + 2 * (atomnr + N_y + 1) - 1)] = -all_k_xy[0][1]
+                                        hNN[j - 1, int(j - 1 + 2 * (atomnr + N_y + 1) - 1)] = -all_k_xy[0][1]
+                                        hNN[j, int(j - 1 + 2 * (atomnr + N_y + 1) - 2)] = -all_k_xy[0][1]
 
                                     elif atomnr ==  N_y and interaction_range > 1:
-                                        hNN[j - 1, int(2 * (atomnr + N_y - 1) - 2)] = -all_k_xy[0][1]
-                                        hNN[j, int(2 * (atomnr + N_y - 1) - 1)] = -all_k_xy[0][1]
+                                        hNN[j - 1, int(2 * (atomnr + N_y - 1) - 1)] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr + N_y - 1) - 2)] = -all_k_xy[0][1]
 
                                     
                                     elif atomnr > N_y and interaction_range > 1 and (atomnr == (i + 1) * N_y or atomnr == i * N_y + 1) and atomnr <= N_y * interaction_range - N_y:
                                         # N_y == 2 case
                                         if atomnr == i * N_y + 1:
-                                            hNN[j, 2 * int(i * N_y + 1 + N_y + 1) - 1] = -all_k_xy[0][1]
-                                            hNN[j - 1, 2 * int(i * N_y + 1 + N_y + 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j, 2 * int(i * N_y + 1 + N_y + 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j - 1, 2 * int(i * N_y + 1 + N_y + 1) - 1] = -all_k_xy[0][1]
                                             
-                                            hNN[j, 2 * int(i * N_y + 1 - N_y + 1) - 1] = -all_k_xy[0][1]
-                                            hNN[j - 1, 2 * int(i * N_y + 1 - N_y + 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j, 2 * int(i * N_y + 1 - N_y + 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j - 1, 2 * int(i * N_y + 1 - N_y + 1) - 1] = -all_k_xy[0][1]
                                         
                                         elif atomnr == (i + 1) * N_y:
-                                            hNN[j, 2 * int((i + 1) * N_y + N_y - 1) - 1] = -all_k_xy[0][1]
-                                            hNN[j - 1, 2 * int((i + 1) * N_y + N_y - 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j, 2 * int((i + 1) * N_y + N_y - 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j - 1, 2 * int((i + 1) * N_y + N_y - 1) - 1] = -all_k_xy[0][1]
                                             
-                                            hNN[j, 2 * int((i + 1) * N_y - N_y - 1) - 1] = -all_k_xy[0][1]
-                                            hNN[j - 1, 2 * int((i + 1) * N_y - N_y - 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j, 2 * int((i + 1) * N_y - N_y - 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j - 1, 2 * int((i + 1) * N_y - N_y - 1) - 1] = -all_k_xy[0][1]
                                             
                                     elif (atomnr == N_y * interaction_range - N_y + 1 or atomnr == N_y * interaction_range):
                                         if atomnr == N_y * interaction_range - N_y + 1:
-                                            hNN[j, 2 * int(N_y * interaction_range - N_y + 1 - N_y + 1) - 1] = -all_k_xy[0][1]
-                                            hNN[j - 1, 2 * int(N_y * interaction_range - N_y + 1 - N_y + 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j, 2 * int(N_y * interaction_range - N_y + 1 - N_y + 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j - 1, 2 * int(N_y * interaction_range - N_y + 1 - N_y + 1) - 1] = -all_k_xy[0][1]
                                         elif atomnr == N_y * interaction_range:
-                                            hNN[j, 2 * int(N_y * interaction_range - N_y - 1) - 1] = -all_k_xy[0][1]
-                                            hNN[j - 1, 2 * int(N_y * interaction_range - N_y - 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j, 2 * int(N_y * interaction_range - N_y - 1) - 2] = -all_k_xy[0][1]
+                                            hNN[j - 1, 2 * int(N_y * interaction_range - N_y - 1) - 1] = -all_k_xy[0][1]
 
 
-                                hNN[j, j] = all_k_y[0][1] + 2 * all_k_xy[0][1]
+                                hNN[j, j] = all_k_y[0][1]
 
                                 if j == 1 + i * 2 * N_y:
                                     hNN[j, j + 2] = -all_k_y[0][1]
@@ -392,46 +392,46 @@ class Ribbon2D(Electrode):
                             else:
                                 
                                 atomnr = np.ceil(float(j) / 2)
-                                hNN[j, j] = 2 * all_k_y[0][1] + 4 * all_k_xy[0][1]
+                                hNN[j, j] = 2 * all_k_y[0][1]
                                 
                                 # xy-coupling inner atom
                                 if interaction_range > 1:
                                     if atomnr < N_y:# and interaction_range > 1:
                                         ## first layer
                                         # first atom
-                                        hNN[j - 1, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
-                                        hNN[j, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
 
                                         #second atom
-                                        hNN[j - 1, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
-                                        hNN[j, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
 
                                     elif atomnr > i * N_y and (i + 1) * N_y == N_y * interaction_range:
                                         ## last layer
                                         # first atom
-                                        hNN[j - 1, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
-                                        hNN[j, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
 
                                         # second atom
-                                        hNN[j - 1, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
-                                        hNN[j, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
                                     
                                     elif atomnr > i * N_y and atomnr < (i + 1) * N_y and (i + 1) * N_y < N_y * interaction_range:
                                         ## layer before
                                         # first atom
-                                        hNN[j - 1, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
-                                        hNN[j, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
                                         # second atom
-                                        hNN[j - 1, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
-                                        hNN[j, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
 
                                         ## layer after
                                         # first atom
-                                        hNN[j - 1, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
-                                        hNN[j, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
                                         # second atom
-                                        hNN[j - 1, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
-                                        hNN[j, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        hNN[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
 
                                     
 
@@ -456,7 +456,7 @@ class Ribbon2D(Electrode):
 
                                 else:
                                     for k in range(1, interaction_range):
-                                        if atomnr - k - 1 > i * N_y and atomnr + k < N_y + i * N_y:
+                                        if atomnr - k - 1 > i * N_y and atomnr + k < N_y + i * N_y:#N_y * interaction_range:
                                             hNN[j, j] += 2 * all_k_y[k][1]
                                         elif (atomnr - k - 1 <= i * N_y and atomnr + k < i * N_y + N_y) or (atomnr - k - 1 > i * N_y and atomnr + k >= i * N_y + N_y):
                                             hNN[j, j] += all_k_y[k][1]
@@ -524,20 +524,20 @@ class Ribbon2D(Electrode):
                         if N_y > 1:
                             
                             if j == 0 or j == 2 * N_y - 2:
-                                h00[j, j] += all_k_xy[0][1]
-                                h00[j + 1, j + 1] += all_k_xy[0][1]
+                                h00[j, j + 1] = all_k_xy[0][1]
+                                h00[j + 1, j] = all_k_xy[0][1]
 
                             elif j < 2 * N_y - 2:
-                                h00[j, j] += 2 * all_k_xy[0][1]
-                                h00[j + 1, j + 1] += 2 * all_k_xy[0][1]
+                                h00[j, j + 1] = 2 * all_k_xy[0][1]
+                                h00[j + 1, j] = 2 * all_k_xy[0][1]
 
                             elif (j == i * 2 * N_y or j == i * 2 * N_y + 2 * N_y - 2) and (j != 0 and j != 2 * N_y - 2):
-                                h00[j, j] += 2 * all_k_xy[0][1]
-                                h00[j + 1, j + 1] += 2 * all_k_xy[0][1]
+                                h00[j, j + 1] = 2 * all_k_xy[0][1]
+                                h00[j + 1, j] = 2 * all_k_xy[0][1]
 
                             elif j != 0 + i * 2 * N_y and j != i * 2 * N_y + 2 * N_y - 2 and N_y > 2:
-                                h00[j, j] += 4 * all_k_xy[0][1]
-                                h00[j + 1, j + 1] += 4 * all_k_xy[0][1]
+                                h00[j, j + 1] = 4 * all_k_xy[0][1]
+                                h00[j + 1, j] = 4 * all_k_xy[0][1]
                         
 
                     else:
@@ -552,45 +552,42 @@ class Ribbon2D(Electrode):
                                 if interaction_range > 1:
                                     
                                     if atomnr < N_y: #and interaction_range > 1:
-                                        h00[j - 1, int(j - 1 + 2 * (atomnr + N_y + 1) - 2)] = -all_k_xy[0][1]
-                                        h00[j, int(j - 1 + 2 * (atomnr + N_y + 1) - 1)] = -all_k_xy[0][1]
+                                        h00[j - 1, int(j - 1 + 2 * (atomnr + N_y + 1) - 1)] = -all_k_xy[0][1]
+                                        h00[j, int(j - 1 + 2 * (atomnr + N_y + 1) - 2)] = -all_k_xy[0][1]
 
                                     elif atomnr == N_y and interaction_range > 1:
-                                        h00[j - 1, int(2 * (atomnr + N_y - 1) - 2)] = -all_k_xy[0][1]
-                                        h00[j, int(2 * (atomnr + N_y - 1) - 1)] = -all_k_xy[0][1]
+                                        h00[j - 1, int(2 * (atomnr + N_y - 1) - 1)] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr + N_y - 1) - 2)] = -all_k_xy[0][1]
 
                                     elif atomnr > N_y and interaction_range > 1 and (atomnr == (i + 1) * N_y or atomnr == i * N_y + 1) and atomnr <= N_y * interaction_range - N_y:
                                         # N_y == 2 case
                                         if atomnr == i * N_y + 1:
-                                            h00[j, 2 * int(i * N_y + 1 + N_y + 1) - 1] = -all_k_xy[0][1]
-                                            h00[j - 1, 2 * int(i * N_y + 1 + N_y + 1) - 2] = -all_k_xy[0][1]
+                                            h00[j, 2 * int(i * N_y + 1 + N_y + 1) - 2] = -all_k_xy[0][1]
+                                            h00[j - 1, 2 * int(i * N_y + 1 + N_y + 1) - 1] = -all_k_xy[0][1]
                                             
-                                            h00[j, 2 * int(i * N_y + 1 - N_y + 1) - 1] = -all_k_xy[0][1]
-                                            h00[j - 1, 2 * int(i * N_y + 1 - N_y + 1) - 2] = -all_k_xy[0][1]
+                                            h00[j, 2 * int(i * N_y + 1 - N_y + 1) - 2] = -all_k_xy[0][1]
+                                            h00[j - 1, 2 * int(i * N_y + 1 - N_y + 1) - 1] = -all_k_xy[0][1]
                                         
                                         elif atomnr == (i + 1) * N_y:
-                                            h00[j, 2 * int((i + 1) * N_y + N_y - 1) - 1] = -all_k_xy[0][1]
-                                            h00[j - 1, 2 * int((i + 1) * N_y + N_y - 1) - 2] = -all_k_xy[0][1]
+                                            h00[j, 2 * int((i + 1) * N_y + N_y - 1) - 2] = -all_k_xy[0][1]
+                                            h00[j - 1, 2 * int((i + 1) * N_y + N_y - 1) - 1] = -all_k_xy[0][1]
                                             
-                                            h00[j, 2 * int((i + 1) * N_y - N_y - 1) - 1] = -all_k_xy[0][1]
-                                            h00[j - 1, 2 * int((i + 1) * N_y - N_y - 1) - 2] = -all_k_xy[0][1]
+                                            h00[j, 2 * int((i + 1) * N_y - N_y - 1) - 2] = -all_k_xy[0][1]
+                                            h00[j - 1, 2 * int((i + 1) * N_y - N_y - 1) - 1] = -all_k_xy[0][1]
                                             
                                     elif (atomnr == N_y * interaction_range - N_y + 1 or atomnr == N_y * interaction_range):
                                         
                                         if atomnr == N_y * interaction_range - N_y + 1:
-                                            h00[j, 2 * int(N_y * interaction_range - N_y + 1 - N_y + 1) - 1] = -all_k_xy[0][1]
-                                            h00[j - 1, 2 * int(N_y * interaction_range - N_y + 1 - N_y + 1) - 2] = -all_k_xy[0][1]
+                                            h00[j, 2 * int(N_y * interaction_range - N_y + 1 - N_y + 1) - 2] = -all_k_xy[0][1]
+                                            h00[j - 1, 2 * int(N_y * interaction_range - N_y + 1 - N_y + 1) - 1] = -all_k_xy[0][1]
                                         elif atomnr == N_y * interaction_range:
-                                            h00[j, 2 * int(N_y * interaction_range - N_y - 1) - 1] = -all_k_xy[0][1]
-                                            h00[j - 1, 2 * int(N_y * interaction_range - N_y - 1) - 2] = -all_k_xy[0][1]
+                                            h00[j, 2 * int(N_y * interaction_range - N_y - 1) - 2] = -all_k_xy[0][1]
+                                            h00[j - 1, 2 * int(N_y * interaction_range - N_y - 1) - 1] = -all_k_xy[0][1]
 
 
 
                                 #y - coupling
-                                if i == 0:
-                                    h00[j, j] = all_k_y[0][1] + all_k_xy[0][1]
-                                else:
-                                    h00[j, j] = all_k_y[0][1] + 2 * all_k_xy[0][1]
+                                h00[j, j] = all_k_y[0][1]
 
                                 if j == 1 + i * 2 * N_y:
                                     h00[j, j + 2] = -all_k_y[0][1]
@@ -619,11 +616,7 @@ class Ribbon2D(Electrode):
                             else:
                                 
                                 atomnr = np.ceil(float(j) / 2)
-
-                                if i == 0:
-                                    h00[j, j] = 2 * all_k_y[0][1] + 2 * all_k_xy[0][1]
-                                else:
-                                    h00[j, j] = 2 * all_k_y[0][1] + 4 * all_k_xy[0][1]
+                                h00[j, j] = 2 * all_k_y[0][1]
                                 
                                 # xy-coupling inner atom, inner layers
                                 if interaction_range > 1:
@@ -631,39 +624,39 @@ class Ribbon2D(Electrode):
                                     if atomnr < N_y: #and interaction_range > 1:
                                         ## first layer
                                         # first atom
-                                        h00[j - 1, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
-                                        h00[j, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
 
                                         #second atom
-                                        h00[j - 1, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
-                                        h00[j, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
 
                                     elif atomnr > i * N_y and (i + 1) * N_y == N_y * interaction_range:
                                         ## last layer
                                         # first atom
-                                        h00[j - 1, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
-                                        h00[j, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
 
                                         # second atom
-                                        h00[j - 1, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
-                                        h00[j, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
                                     
                                     elif atomnr > i * N_y and atomnr < (i + 1) * N_y and (i + 1) * N_y < N_y * interaction_range:
                                         ## layer before
                                         # first atom
-                                        h00[j - 1, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
-                                        h00[j, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j - 1, int(2 * (atomnr - N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr - N_y - 1)) - 2] = -all_k_xy[0][1]
                                         # second atom
-                                        h00[j - 1, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
-                                        h00[j, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j - 1, int(2 * (atomnr - N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr - N_y + 1)) - 2] = -all_k_xy[0][1]
 
                                         ## layer after
                                         # first atom
-                                        h00[j - 1, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
-                                        h00[j, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j - 1, int(2 * (atomnr + N_y - 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr + N_y - 1)) - 2] = -all_k_xy[0][1]
                                         # second atom
-                                        h00[j - 1, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
-                                        h00[j, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j - 1, int(2 * (atomnr + N_y + 1)) - 1] = -all_k_xy[0][1]
+                                        h00[j, int(2 * (atomnr + N_y + 1)) - 2] = -all_k_xy[0][1]
 
                                     
 
@@ -733,49 +726,39 @@ class Ribbon2D(Electrode):
                             if (interaction_range - 1) * N_y < atomnr_lay1 <= interaction_range * N_y and atomnr_lay2 <= N_y:
                                 # edge atoms
                                 if atomnr_lay1 == (interaction_range - 1) * N_y + 1 and atomnr_lay2 == 2:
-                                    h01[i, j] = -all_k_xy[0][1]
-                                    h01[i + 1, j + 1] = -all_k_xy[0][1]
+                                    h01[i, j + 1] = -all_k_xy[0][1]
+                                    h01[i + 1, j] = -all_k_xy[0][1]
                                 
                                 elif atomnr_lay1 == interaction_range * N_y and atomnr_lay2 == N_y - 1:
-                                    h01[i, j] = -all_k_xy[0][1]
-                                    h01[i + 1, j + 1] = -all_k_xy[0][1]
+                                    h01[i, j + 1] = -all_k_xy[0][1]
+                                    h01[i + 1, j] = -all_k_xy[0][1]
                                 
                                 # middle atoms
                                 elif atomnr_lay2 == atomnr_lay1 - (interaction_range - 1) * N_y + 1 or atomnr_lay2 == atomnr_lay1 - (interaction_range - 1) * N_y - 1:
-                                    h01[i, j] = -all_k_xy[0][1]
-                                    h01[i + 1, j + 1] = -all_k_xy[0][1]
-                            
+                                    h01[i, j + 1] = -all_k_xy[0][1]
+                                    h01[i + 1, j] = -all_k_xy[0][1]
+                         
                         else:
                             # edge atoms
                             if atomnr_lay1 == 1 and atomnr_lay2 == 2:
-                                h01[i, j] = -all_k_xy[0][1]
-                                h01[i + 1, j + 1] = -all_k_xy[0][1]
+                                h01[i, j + 1] = -all_k_xy[0][1]
+                                h01[i + 1, j] = -all_k_xy[0][1]
                             elif atomnr_lay1 == N_y and atomnr_lay2 == N_y - 1:
-                                h01[i, j] = -all_k_xy[0][1]
-                                h01[i + 1, j + 1] = -all_k_xy[0][1]
+                                h01[i, j + 1] = -all_k_xy[0][1]
+                                h01[i + 1, j] = -all_k_xy[0][1]
                             elif atomnr_lay2 == atomnr_lay1 - 1 or atomnr_lay2 == atomnr_lay1 + 1:
-                                h01[i, j] = -all_k_xy[0][1]
-                                h01[i + 1, j + 1] = -all_k_xy[0][1]
+                                h01[i, j + 1] = -all_k_xy[0][1]
+                                h01[i + 1, j] = -all_k_xy[0][1]
                             
                             # make matrix now symmetric
                             h01[j, i] = h01[i, j]        
                                                         
 
             return h01
+                    
 
         H_NN = build_H_NN_new()
         H_00 = build_H_00_new()
-
-        '''
-        #Just in case 
-        n = H_00.shape[0]
-        diag_indices = np.arange(n)
-        half = n // 2
-        diag = H_00[diag_indices, diag_indices]
-        new_diag = np.concatenate((diag[half:], diag[:half]))
-        H_00[diag_indices, diag_indices] = new_diag
-        '''
-
         H_01 = build_H_01_new()
         
         assert (0 <= np.abs(np.sum(H_00 + H_01)) < 1E-10), "Sum rule violated! H_00 + H_01 is not zero! Check the force constants and the interaction range."
@@ -785,7 +768,6 @@ class Ribbon2D(Electrode):
         # Start decimation algorithm
 
         def calc_g0_w(w):
-            w_temp = w
             w = np.identity(H_NN.shape[0]) * (w**2 + (1.j * 1E-10))  # add small imaginary part to avoid singularities
             g = np.linalg.inv(w - H_NN) 
             alpha_i = np.dot(np.dot(H_01, g), H_01)
@@ -797,7 +779,6 @@ class Ribbon2D(Electrode):
             deltas.append(delta)
             counter = 0
             terminated = False
-            
             while delta > self.eps:
                 counter += 1
 
@@ -805,13 +786,7 @@ class Ribbon2D(Electrode):
                     terminated = True
                     break
 
-                try:
-                    g = np.linalg.inv(w - epsilon_i)
-                except np.linalg.LinAlgError:
-                    print(f"Matrix regularization was applied during the decimation algorithm for w = {w_temp}.")
-                    g = np.nan_to_num((w - epsilon_i), nan=0.0, posinf=0.0, neginf=0.0)
-                    g = np.linalg.inv(g + 1e-8 * np.eye(g.shape[0]))
-                    
+                g = np.linalg.inv(w - epsilon_i)
                 epsilon_i = epsilon_i + np.dot(np.dot(alpha_i, g), beta_i) + np.dot(np.dot(beta_i, g), alpha_i)
                 epsilon_is = epsilon_is + np.dot(np.dot(alpha_i, g), beta_i)
                 alpha_i = np.dot(np.dot(alpha_i, g), alpha_i)
@@ -877,7 +852,7 @@ class Ribbon2D(Electrode):
         k_lc_LL = np.zeros((2 * N_y * interaction_range, 2 * N_y * interaction_range), dtype=float) 
         
         interaction_layers_dict = dict()
-
+        
         for i in range(interaction_range):
             
             interaction_layer = np.zeros((2 * N_y, 2 * N_y), dtype=float)
@@ -891,22 +866,22 @@ class Ribbon2D(Electrode):
                     if atomnr == ((N_y - N_y_scatter) // 2) or atomnr == ((N_y - N_y_scatter) // 2) + N_y_scatter + 1:
                         
                         if i == 0:
-                            interaction_layer[j, j] += -all_k_c_xy[0][1]
-                            interaction_layer[j + 1, j + 1] += -all_k_c_xy[0][1]
+                            interaction_layer[j, j + 1] = -all_k_c_xy[0][1]
+                            interaction_layer[j + 1, j] = -all_k_c_xy[0][1]
                     
                     elif ((N_y - N_y_scatter) // 2) < atomnr < ((N_y - N_y_scatter) // 2) + N_y_scatter + 1:
                         
-                        interaction_layer[j, j] += -sum(all_k_c_x[k][1] for k in range(i, interaction_range))
+                        interaction_layer[j, j] = -sum(all_k_c_x[k][1] for k in range(i, interaction_range))
                         
             
                         if i == 0:
 
                             if (atomnr == ((N_y - N_y_scatter) // 2) + 1 or atomnr == ((N_y - N_y_scatter) // 2) + N_y_scatter) and N_y_scatter > 1:
-                                interaction_layer[j, j] += -all_k_c_xy[0][1]
-                                interaction_layer[j + 1, j + 1] += -all_k_c_xy[0][1]
+                                interaction_layer[j, j + 1] = -all_k_c_xy[0][1]
+                                interaction_layer[j + 1, j] = -all_k_c_xy[0][1]
                             elif N_y_scatter > 1:
-                                interaction_layer[j, j] += -2 * all_k_c_xy[0][1]
-                                interaction_layer[j + 1, j + 1] += -2 * all_k_c_xy[0][1]
+                                interaction_layer[j, j + 1] = -2 * all_k_c_xy[0][1]
+                                interaction_layer[j + 1, j] = -2 * all_k_c_xy[0][1]
             
             interaction_layers_dict[i] = interaction_layer       
                         
