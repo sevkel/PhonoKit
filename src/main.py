@@ -57,6 +57,20 @@ class PhononTransport:
 		self.N = N
 		self.E_D = E_D
 
+		# Check for allowed combinations of electrode and scatter types
+		if (self.electrode_dict_L["type"], self.electrode_dict_R["type"], self.scatter_dict["type"]) not in [
+			("DebeyeModel", "DebeyeModel", "FiniteLattice2D"),
+			("DebeyeModel", "DebeyeModel", "Chain1D"),
+			("Ribbon2D", "Ribbon2D", "FiniteLattice2D"), 
+			("Ribbon2D", "Ribbon2D", "Chain1D"),
+			("Chain1D", "Chain1D", "Chain1D"),
+			("InfiniteFourier2D", "InfiniteFourier2D", "FiniteLattice2D"),
+			("InfiniteFourier2D", "InfiniteFourier2D", "Chain1D"),
+			("DecimationFourier", "DecimationFourier", "FiniteLattice2D"),
+			("DecimationFourier", "DecimationFourier", "Chain1D")
+		]:
+			raise ValueError(f"Invalid combination of electrode type '{self.electrode_L.type}', '{self.electrode_R.type}' and scatter type '{self.scatter.type}'")
+
         # Convert to har * s / (bohr**2 * u)
 		#self.w_D = (E_D * const.meV2J / const.h_bar) / const.unit2SI
 
@@ -73,18 +87,6 @@ class PhononTransport:
 		print("########## Setting up the electrodes ##########")
 		self.electrode_L = self.__initialize_electrode(self.electrode_dict_L)
 		self.electrode_R = self.__initialize_electrode(self.electrode_dict_R)
-
-		# Check for allowed combinations of electrode and scatter types
-		if (self.electrode_dict_L["type"], self.electrode_dict_R["type"], self.scatter_dict["type"]) not in [
-			("DebeyeModel", "DebeyeModel", "FiniteLattice2D"),
-			("DebeyeModel", "DebeyeModel", "Chain1D"),
-			("Ribbon2D", "Ribbon2D", "FiniteLattice2D"), 
-			("Ribbon2D", "Ribbon2D", "Chain1D"),
-			("Chain1D", "Chain1D", "Chain1D"),
-			("InfiniteFourier2D", "InfiniteFourier2D", "FiniteLattice2D"),
-			("InfiniteFourier2D", "InfiniteFourier2D", "Chain1D")
-		]:
-			raise ValueError(f"Invalid combination of electrode type '{self.electrode_L.type}', '{self.electrode_R.type}' and scatter type '{self.scatter.type}'")
 
 		self.D = self.scatter.hessian #* top.atom_weight(self.M_C) * (const.eV2hartree / const.ang2bohr ** 2)
   
@@ -187,6 +189,27 @@ class PhononTransport:
 					k_c_xy = electrode_dict["k_c_xy"],
 					N_y_scatter = self.scatter.N_y
 				)
+			
+			case "DecimationFourier":
+				return el.DecimationFourier(
+					self.w,
+					interaction_range = electrode_dict["interaction_range"],
+					interact_potential = electrode_dict["interact_potential"],
+					atom_type = electrode_dict["atom_type"],
+					lattice_constant = electrode_dict["lattice_constant"],
+					N_y = electrode_dict["N_y"],
+					N_y_scatter = self.scatter.N_y,
+					M_L = self.M_L,
+					M_C = self.M_C,
+					k_x = electrode_dict["k_x"],
+					k_y = electrode_dict["k_y"],
+					k_xy = electrode_dict["k_xy"],
+					k_c = electrode_dict["k_c"],
+					k_c_xy = electrode_dict["k_c_xy"],
+					left = electrode_dict["left"],
+					right = electrode_dict["right"],
+					N_q = electrode_dict["N_q"]
+				)
 	
 			case _:
 				raise ValueError(f"Unsupported electrode type: {electrode_dict['type']}")
@@ -274,7 +297,7 @@ class PhononTransport:
      
 				return sigma_L, sigma_R
     			
-			case ("Ribbon2D", "Ribbon2D"):
+			case ("Ribbon2D", "Ribbon2D") | ("DecimationFourier", "DecimationFourier"):
 				#2D
 				g_L = self.electrode_L.g
 				g_R = self.electrode_R.g
@@ -487,9 +510,10 @@ class PhononTransport:
 				k_RC = self.electrode_R.k_lc_LL
 
 		# Initialize sigma array with the same shape as g
+
 		sigma_L = np.zeros((self.N, self.D.shape[0], self.D.shape[1]), dtype=complex)
 		sigma_R = np.zeros((self.N, self.D.shape[0], self.D.shape[1]), dtype=complex)
-
+		
 		# Build sigma matrix for each frequency depending on the (allowed) electrode model configuration
 		# The 1D Chain transmission has an analytical expression an is covered directly there.
 		
@@ -521,11 +545,44 @@ class PhononTransport:
 			(g_L.shape, g_R.shape) == ((self.N, 2 * self.electrode_L.interaction_range * self.electrode_L.N_y, 2 * self.electrode_L.interaction_range * self.electrode_L.N_y), \
 			(self.N, 2 * self.electrode_R.interaction_range * self.electrode_R.N_y, 2 * self.electrode_R.interaction_range * self.electrode_R.N_y)):
 
-   
+			
 			sigma_L = np.array(list(map(lambda i: np.dot(np.dot(k_LC.T, g_L[i]), k_LC), self.i)))
 			sigma_R = np.array(list(map(lambda i: np.dot(np.dot(k_RC.T, g_R[i]), k_RC), self.i)))
    
 			print('debug')
+
+		elif (electrode_dict_L["type"], electrode_dict_R["type"]) == ("DecimationFourier", "DecimationFourier"):
+
+			q_y_vals = np.linspace(-np.pi, np.pi, self.electrode_L.N_q)
+			sigmaL_wq = []
+			sigmaR_wq = []
+
+			for w_idx in range(self.N):
+				sigmaL_q = []
+				sigmaR_q = []
+
+				for q_idx, q_y in enumerate(q_y_vals):
+
+					#k_LC_q = self.electrode_L.fourier_transform_H(k_LC, q_y)
+					#k_RC_q = self.electrode_R.fourier_transform_H(k_RC, q_y)
+
+					x_L = g_L[w_idx, q_idx]
+					x_R = g_R[w_idx, q_idx]
+
+					sigma_L_q_i = np.dot(np.dot(k_LC.T, x_L), k_LC)
+					sigma_R_q_i = np.dot(np.dot(k_RC.T, x_R), k_RC)
+
+					sigmaL_q.append(sigma_L_q_i)
+					sigmaR_q.append(sigma_R_q_i)
+
+				sigmaL_q = np.array(sigmaL_q)
+				sigmaR_q = np.array(sigmaR_q)
+
+				sigmaL_wq.append(sigmaL_q)
+				sigmaR_wq.append(sigmaR_q)
+
+			sigma_L = np.array(sigmaL_wq)
+			sigma_R = np.array(sigmaR_wq)
 
 		# 3D case (decimation technique) #TODO: Implementation
 		elif (electrode_dict_L["type"], electrode_dict_R["type"]) == ("Ribbon3D", "Ribbon3D") and \
@@ -563,9 +620,38 @@ class PhononTransport:
 		Returns:
 			g_cc (np.ndarray): Greens function for the central part
 		"""
+		if (self.electrode_dict_L["type"], self.electrode_dict_R["type"]) == ("DecimationFourier", "DecimationFourier"):
 
-		g_CC_ret = np.array(list(map(lambda i: np.linalg.inv((self.w[i] + 1E-16j)**2 * np.identity(self.D.shape[0]) - self.D - self.sigma_L[i] - self.sigma_R[i]), self.i)))
-		g_CC_adv = np.transpose(np.conj(g_CC_ret), (0, 2, 1))
+			q_y_vals = np.linspace(-np.pi, np.pi, self.electrode_L.N_q)
+			g_CC_ret_wq = []
+			g_CC_adv_wq = []
+
+			for w_idx in range(self.N):
+				g_CC_ret_q = []
+				g_CC_adv_q = []
+
+				for q_y_idx, q_y in enumerate(q_y_vals):
+					
+					#D_q = self.electrode_L.fourier_transform_H(self.D, q_y)
+
+					g_CC_ret_q_mat = np.linalg.inv((self.w[w_idx] + 1E-16j)**2 * np.identity(self.D.shape[0]) - self.D - self.sigma_L[w_idx, q_y_idx] - self.sigma_R[w_idx, q_y_idx])
+					g_CC_adv_q_mat = np.transpose(np.conj(g_CC_ret_q_mat))
+
+					g_CC_ret_q.append(g_CC_ret_q_mat)
+					g_CC_adv_q.append(g_CC_adv_q_mat)
+
+				g_CC_ret_q = np.array(g_CC_ret_q)
+				g_CC_adv_q = np.array(g_CC_adv_q)
+
+				g_CC_ret_wq.append(g_CC_ret_q)
+				g_CC_adv_wq.append(g_CC_adv_q)
+			
+			g_CC_ret = np.array(g_CC_ret_wq)
+			g_CC_adv = np.array(g_CC_adv_wq)
+
+		else:
+			g_CC_ret = np.array(list(map(lambda i: np.linalg.inv((self.w[i] + 1E-16j)**2 * np.identity(self.D.shape[0]) - self.D - self.sigma_L[i] - self.sigma_R[i]), self.i)))
+			g_CC_adv = np.transpose(np.conj(g_CC_ret), (0, 2, 1))
 
 		return g_CC_ret, g_CC_adv	
 
@@ -604,7 +690,42 @@ class PhononTransport:
 			tau_ph = np.array(list(map(lambda i: np.real(np.trace(trans_prob_matrix[i])), self.i)))
 				
 			return tau_ph
-  
+
+		elif self.electrode_dict_L["type"] == "DecimationFourier" and self.electrode_dict_R["type"] == "DecimationFourier" and scatter_dict["type"] == "FiniteLattice2D":
+
+			tau_ph_wq = []
+			tau_ph_wq_probmat = []
+			tau_ph = []
+
+			for w_idx in range(self.N):
+				tau_ph_q = []
+				tau_ph_q_probmat = []
+
+				for q_y_idx in range(self.electrode_L.N_q):
+
+					spectral_dens_L_q = 1j * (self.sigma_L[w_idx, q_y_idx] - np.transpose(np.conj(self.sigma_L[w_idx, q_y_idx])))
+					spectral_dens_R_q = 1j * (self.sigma_R[w_idx, q_y_idx] - np.transpose(np.conj(self.sigma_R[w_idx, q_y_idx])))
+
+					probmat_q = np.dot(np.dot(self.g_CC_ret[w_idx, q_y_idx], spectral_dens_L_q), np.dot(self.g_CC_adv[w_idx, q_y_idx], spectral_dens_R_q))
+					
+					tau_ph_q.append(np.real(np.trace(probmat_q)))
+					tau_ph_q_probmat.append(probmat_q)
+					
+				
+				tau_ph_q_probmat = np.array(tau_ph_q_probmat)
+				tau_ph_q = np.array(tau_ph_q)
+
+				tau_ph_wq_probmat.append(tau_ph_q_probmat)
+				tau_ph_wq.append(tau_ph_q)
+
+				tau_ph.append(np.mean(tau_ph_q, axis=0))
+
+			tau_ph = np.array(tau_ph)
+			
+			return tau_ph
+	
+			
+
 		#spectral_dens_L = -2 * np.imag(self.sigma_L)
 		spectral_dens_L = 1j * (self.sigma_L - np.transpose(np.conj(self.sigma_L), (0, 2, 1)))
 		#spectral_dens_R = -2 * np.imag(self.sigma_R)
@@ -696,12 +817,12 @@ class PhononTransport:
 			#ax1.set_yscale('log')
 			ax1.set_xlabel(r'Phonon Energy ($\mathrm{meV}$)', fontsize=12, fontproperties=prop)
 			ax1.set_ylabel(r'$\tau_{\mathrm{ph}}$', fontsize=12, fontproperties=prop)
-			ax1.set_ylim(0, 6)
+			#ax1.set_ylim(0, 6)
 			ax1.set_xlim(0, 0.6 * E_D)
 			ax1.set_xticklabels(ax1.get_xticks(), fontproperties=prop)
 			ax1.set_yticklabels(ax1.get_yticks(), fontproperties=prop)
-			ax1.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
-			ax1.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+			#ax1.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+			#ax1.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 			ax1.grid()
 	
 		
@@ -747,13 +868,13 @@ class PhononTransport:
 			if not os.path.exists(path_transdos):
 				os.makedirs(path_transdos)
 
-			try:
+			'''try:
 				top.write_plot_data(path_dos + f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}_kc_xy={self.scatter_dict["k_xy"]}_DOS.dat", (self.w, dos_L, dos_real_L, dos_R, dos_real_R, dos_L_cpld, dos_real_L_cpld, dos_R_cpld, dos_real_R_cpld), "w (sqrt(har/(bohr**2*u))), DOS_L (a.u.), DOS_L_real (a.u.), DOS_R (a.u.), DOS_R_real (a.u.), DOS_L_cpld (a.u.), DOS_L_real_cpld (a.u.), DOS_R_cpld (a.u.), DOS_R_real_cpld (a.u.)")
 				top.write_plot_data(path_transdos + f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}_kc_xy={self.scatter_dict["k_xy"]}_DOS.dat", (self.w, dos_L, dos_real_L, dos_R, dos_real_R, dos_L_cpld, dos_real_L_cpld, dos_R_cpld, dos_real_R_cpld), "w (sqrt(har/(bohr**2*u))), DOS_L (a.u.), DOS_L_real (a.u.), DOS_R (a.u.), DOS_R_real (a.u.), DOS_L_cpld (a.u.), DOS_L_real_cpld (a.u.), DOS_R_cpld (a.u.), DOS_R_real_cpld (a.u.)")
 			except KeyError as e:
 				top.write_plot_data(path_dos + f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}_DOS.dat", (self.w, dos_L, dos_real_L, dos_R, dos_real_R, dos_L_cpld, dos_real_L_cpld, dos_R_cpld, dos_real_R_cpld), "w (sqrt(har/(bohr**2*u))), DOS_L (a.u.), DOS_L_real (a.u.), DOS_R (a.u.), DOS_R_real (a.u.), DOS_L_cpld (a.u.), DOS_L_real_cpld (a.u.), DOS_R_cpld (a.u.), DOS_R_real_cpld (a.u.)")
 				top.write_plot_data(path_transdos + f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}_DOS.dat", (self.w, dos_L, dos_real_L, dos_R, dos_real_R, dos_L_cpld, dos_real_L_cpld, dos_R_cpld, dos_real_R_cpld), "w (sqrt(har/(bohr**2*u))), DOS_L (a.u.), DOS_L_real (a.u.), DOS_R (a.u.), DOS_R_real (a.u.), DOS_L_cpld (a.u.), DOS_L_real_cpld (a.u.), DOS_R_cpld (a.u.), DOS_R_real_cpld (a.u.)")
-
+			'''
 		if plot_dos:
 			fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
 			fig.tight_layout()
@@ -788,6 +909,7 @@ class PhononTransport:
 			except KeyError as e:
 				plt.savefig(self.data_path + f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}_DOS.pdf", bbox_inches='tight')
 
+	
 if __name__ == '__main__':
 
     # Load the .json configuration file

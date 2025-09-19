@@ -103,8 +103,8 @@ if __name__ == "__main__":
     k_c = 100
     k_xy = 0
     k_c_xy = 0
-    N_L = 2
-    N_R = 2
+    N_L = 300
+    N_R = 300
     N_C = 2
     delta = 0.5
 
@@ -154,9 +154,10 @@ if __name__ == "__main__":
     K_1D[N_L:N_L+N_C, N_L+N_C:] = K_CR
 
     K_tilde_1D = lagrangian1(K_1D, dimension=1)
+    print("K1D:\n", K_1D)
     print(K_tilde_1D)
     # 2D Version
-    print("\n=== 2D Version ===")
+    #print("\n=== 2D Version ===")
     
     
 
@@ -188,9 +189,9 @@ if __name__ == "__main__":
            0.,    0.,    0.]])
 
 
-    K2Tilde = lagrangian1(K_2D, dimension=2)
-    print(K_2D)
-    print("K2Tilde:\n", K2Tilde)
+   #K2Tilde = lagrangian1(K_2D, dimension=2)
+    #print(K_2D)
+    #print("K2Tilde:\n", K2Tilde)
 
 
 
