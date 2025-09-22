@@ -1684,9 +1684,9 @@ class DecimationFourier(Electrode):
             
             for q_y in q_y_vals:
 
-                H_NN_k = H_NN.copy()
-                H_00_k = H_00.copy()
-                H_01_k = H_01.copy()
+                H_NN_k = H_NN.copy().astype(np.complex128)
+                H_00_k = H_00.copy().astype(np.complex128)
+                H_01_k = H_01.copy().astype(np.complex128)
 
                 # all three matrices have the same shape, there for the loop is over the shape of just anyone of them --> next nearest neighbours for now!
                 for i in range(H_00.shape[0]):
@@ -1694,37 +1694,49 @@ class DecimationFourier(Electrode):
                     if i % 2 == 0:
                         atomnr_i = np.ceil(float(i + 1) / 2)
                     
-                    if atomnr_i == 1 or atomnr_i == self.N_y and i < H_00.shape[0] - 1:
-                        # H_00
-                        H_00_k[i, i] += all_k_xy[0][1]
-                        H_00_k[i + 1, i + 1] += all_k_y[0][1] + all_k_xy[0][1]
-                        
-                        #H_NN
-                        H_NN_k[i, i] += 2 * all_k_xy[0][1]
-                        H_NN_k[i + 1, i + 1] += all_k_y[0][1] + 2 * all_k_xy[0][1]
+                        if (atomnr_i == 1 or atomnr_i == self.N_y) and i < H_00.shape[0] - 1:
+            
+                            if atomnr_i == 1:
+                                # H_00
+                                H_00_k[i, i] += all_k_xy[0][1]# * np.exp(-1j * q_y)
+                                H_00_k[i + 1, i + 1] += (all_k_y[0][1] + all_k_xy[0][1])# * np.exp(-1j * q_y)
+                                
+                                #H_NN
+                                H_NN_k[i, i] += 2 * all_k_xy[0][1]# * np.exp(-1j * q_y)
+                                H_NN_k[i + 1, i + 1] += (all_k_y[0][1] + 2 * all_k_xy[0][1])# * np.exp(-1j * q_y)
+
+                            else:
+                                # H_00
+                                H_00_k[i, i] += all_k_xy[0][1]# * np.exp(1j * q_y)
+                                H_00_k[i + 1, i + 1] += (all_k_y[0][1] + all_k_xy[0][1])# * np.exp(1j * q_y)
+                                
+                                #H_NN
+                                H_NN_k[i, i] += 2 * all_k_xy[0][1]# * np.exp(1j * q_y)
+                                H_NN_k[i + 1, i + 1] += (all_k_y[0][1] + 2 * all_k_xy[0][1])# * np.exp(1j * q_y)
+
 
                     for j in range(H_00.shape[1]):
 
                         if j % 2 == 0:
                             atomnr_j = np.ceil(float(j + 1) / 2)
 
-                        if atomnr_i == 1 and atomnr_j == self.N_y and j < H_00.shape[0] - 1:         
-                            #H_00
-                            H_00_k[i + 1, j + 1] += -all_k_y[0][1] * np.exp(-1j * q_y)         
-                            H_00_k[j + 1, i + 1] += -all_k_y[0][1] * np.exp(1j * q_y)
+                            if (atomnr_i == 1 and i == 0) and atomnr_j == self.N_y and j < H_00.shape[0] - 1:         
+                                #H_00 y HIER ALLE MINUSZEICHEN UMGEDREHT!!! (siehe Definition in Czycholl)
+                                H_00_k[i + 1, j + 1] += -all_k_y[0][1] * np.exp(1j * q_y)         
+                                H_00_k[j + 1, i + 1] += -all_k_y[0][1] * np.exp(-1j * q_y)
 
-                            #H_NN
-                            H_NN_k[i + 1, j + 1] += -all_k_y[0][1] * np.exp(-1j * q_y)         
-                            H_NN_k[j + 1, i + 1] += -all_k_y[0][1] * np.exp(1j * q_y)
+                                #H_NN
+                                H_NN_k[i + 1, j + 1] += -all_k_y[0][1] * np.exp(1j * q_y)         
+                                H_NN_k[j + 1, i + 1] += -all_k_y[0][1] * np.exp(-1j * q_y)
 
-                            #H_01
-                            H_01_k[i + 1, j + 1] += -all_k_xy[0][1] * np.exp(-1j * q_y)     
-                            H_01_k[i, j] += -all_k_xy[0][1] * np.exp(-1j * q_y)    
+                                #H_01
+                                H_01_k[i + 1, j + 1] += -all_k_xy[0][1] * np.exp(1j * q_y)     
+                                H_01_k[i, j] += -all_k_xy[0][1] * np.exp(1j * q_y)    
 
-                            H_01_k[j + 1, i + 1] += -all_k_xy[0][1] * np.exp(1j * q_y)
-                            H_01_k[j, i] += -all_k_xy[0][1] * np.exp(1j * q_y)
+                                H_01_k[j + 1, i + 1] += -all_k_xy[0][1] * np.exp(-1j * q_y)
+                                H_01_k[j, i] += -all_k_xy[0][1] * np.exp(-1j * q_y)
 
-                            break
+                                break
 
                 g_k = decimation(w, H_00_k, H_01_k, H_NN_k)
 
