@@ -696,6 +696,7 @@ class PhononTransport:
 			tau_ph_wq = []
 			tau_ph_wq_probmat = []
 			tau_ph = []
+			tau_ph_probmat = []
 
 			for w_idx in range(self.N):
 				tau_ph_q = []
@@ -718,9 +719,20 @@ class PhononTransport:
 				tau_ph_wq_probmat.append(tau_ph_q_probmat)
 				tau_ph_wq.append(tau_ph_q)
 
-				tau_ph.append(np.mean(tau_ph_q, axis=0))
+				#----------- saving transprob mean mat --> not super sure with the mean --------------#
+				tau_ph_probmat.append(np.mean(np.stack(tau_ph_q_probmat, axis=0), axis=0))
 
+				# mean of all q_y for one w!
+				tau_ph.append(np.mean(tau_ph_q, axis=0)) # Think of another Backtransformation
+				
 			tau_ph = np.array(tau_ph)
+			tau_ph_probmat = np.array(tau_ph_probmat)
+
+			try:
+				np.savez(os.path.join(trans_prob_mat_path, f"{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}_kc_xy={self.scatter_dict["k_xy"]}_trans_prob_matrix.npz"), w=self.w, trans_prob_matrix=tau_ph_probmat)
+			except KeyError as e:
+				np.savez(os.path.join(trans_prob_mat_path, f"{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kc={self.scatter_dict["k_x"]}_trans_prob_matrix.npz"), w=self.w, trans_prob_matrix=tau_ph_probmat)
+			#-------------------------------------------------------------------------------------#
 			
 			return tau_ph
 	

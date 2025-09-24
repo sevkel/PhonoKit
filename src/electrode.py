@@ -6,11 +6,13 @@ import numpy as np
 import scipy
 import matplotlib
 import tmoutproc as top
+from joblib import Parallel, delayed
 matplotlib.use('agg')
 from matplotlib import pyplot as plt
 from scipy.integrate import quad
 from scipy.integrate import simpson
 from utils import constants
+
 
 
 class Electrode:
@@ -1619,7 +1621,7 @@ class DecimationFourier(Electrode):
             """
             Decimation algorithm to calculate the surface greens function of a semi-infinite lattice.
             """
-
+            
             w_temp = w
             H_01_dagger = np.conjugate(np.transpose(H_01))
             w = np.identity(H_NN.shape[0]) * (w**2 + (1.j * 1E-10))  # add small imaginary part to avoid singularities
@@ -1677,8 +1679,12 @@ class DecimationFourier(Electrode):
 
         # Initialize array to store g_w matrices for all frequencies
         g_0_wk_list= []
+        
 
-        for w in self.w:
+        ### TRY STORE IN ZERO PADDED MATRIX
+
+
+        for w in self.w:    ### --> MAP
             # Initialize arrays instead of dictionary
             g_0_k_list = []
             
@@ -1751,6 +1757,21 @@ class DecimationFourier(Electrode):
         g_0_wk_array = np.array(g_0_wk_list)
 
         return g_0_wk_array, H_01_k
+
+    @staticmethod
+    def _compute_g_single(g_0_wq, k_lc_LL):
+        """Worker function für die Parallelisierung der g-Berechnung.
+        
+        Args:
+            g_0_wq: Ein einzelnes g_0 Matrix element für spezifisches (w, q)
+            k_lc_LL: Kopplungsmatrix (shared read-only)
+            
+        Returns:
+            g: Berechnete g-Matrix für dieses (w, q) Element
+        """
+        x = g_0_wq
+        g = np.dot(np.linalg.inv(np.identity(x.shape[0]) + np.dot(x, k_lc_LL)), x)
+        return g
 
     def calculate_g(self, g_0, H_01):
     
@@ -1836,24 +1857,29 @@ class DecimationFourier(Electrode):
             
 
         q_y_vals = np.linspace(-np.pi, np.pi, self.N_q)
-        g_wq = []
-
-        for w_idx in range(g_0.shape[0]):
-            g_q = []
-            
-            for q_idx, q_y in enumerate(q_y_vals):
-
-                #k_lc_LL_k = self.fourier_transform_H(k_lc_LL, q_y)
-                
-                x = g_0[w_idx, q_idx]
-
-                g = np.dot(np.linalg.inv(np.identity(x.shape[0]) + np.dot(x, k_lc_LL)), x)
-                g_q.append(g)
-
-            g_q = np.array(g_q)
-            g_wq.append(g_q)
         
-        g_wq = np.array(g_wq)
+        # Optimierte Parallelisierung: Direkt über alle (w,q) Kombinationen
+        # Verwende 'loky' backend für CPU-intensive Matrixoperationen (wegen Python GIL)
+        # Erstelle alle (w_idx, q_idx) Kombinationen
+        w_q_indices = [(w_idx, q_idx) for w_idx in range(g_0.shape[0]) for q_idx in range(self.N_q)]
+        
+        # Parallelisierte Berechnung aller g-Matrizen
+        def compute_single_g(w_idx, q_idx):
+            return self._compute_g_single(g_0[w_idx, q_idx], k_lc_LL)
+        
+        # Berechne alle g-Werte parallel
+        g_results = Parallel(n_jobs=-1, backend='loky')(
+            delayed(compute_single_g)(w_idx, q_idx) for w_idx, q_idx in w_q_indices
+        )
+        
+        # Reshape results zurück in (w, N_q, g.shape[0], g.shape[1]) Form
+        # g_results ist eine flache Liste mit len(w) * N_q Elementen
+        if len(g_results) > 0:
+            matrix_shape = g_results[0].shape  # (g.shape[0], g.shape[1])
+            g_wq = np.array(g_results).reshape(g_0.shape[0], self.N_q, matrix_shape[0], matrix_shape[1])
+        else:
+            # Fallback falls keine Ergebnisse
+            g_wq = np.array([]).reshape(0, self.N_q, 0, 0)
                 
         '''dos_q = (-1 / np.pi) * np.imag(np.trace(g_0, axis1=1, axis2=2))
         dos_real_q = np.real(np.trace(g_0, axis1=1, axis2=2))
