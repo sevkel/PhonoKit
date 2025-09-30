@@ -1,11 +1,11 @@
 .venv
-plot
-helper
-src/misc_code
-old
-misc
+plot/
+helper/
+src/misc_code/
+old/
+misc/
 phonokit.code-workspace
-**/__pycache__
+**/__pycache__/
 *.egg-info
 
 *.pdf

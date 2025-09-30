@@ -6,7 +6,7 @@ from utils import matrix_gen as mg
 
 ###
 
-# Multiply every force constant with (constants.eV2hartree / constants.ang2bohr ** 2) if needed
+# Multiply every force constant with (constants.eV2hartree / constants.ang2bohr ** 2) if needed.
 
 ###
 
@@ -44,7 +44,7 @@ class Chain1D(Model):
         assert self.interaction_range < self.N, "Interaction range must be smaller than the number of atoms in the chain!"
 
         hessian = np.zeros((self.N, self.N), dtype=float)
-        
+
         all_k_coupl_x_l = mg.ranged_force_constant(k_coupl_x=self.k_coupl_x_l)["k_coupl_x"]
         all_k_c_x = mg.ranged_force_constant(k_c_x=self.k_c_x)["k_c_x"]
         all_k_coupl_x_r = mg.ranged_force_constant(k_coupl_x=self.k_coupl_x_r)["k_coupl_x"]

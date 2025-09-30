@@ -11,7 +11,7 @@ from utils import constants, matrix_gen as mg
 
 ###
 
-# Multiply every force constant with (constants.eV2hartree / constants.ang2bohr ** 2) if needed
+# Multiply every force constant with (constants.eV2hartree / constants.ang2bohr ** 2) if needed.
 
 ###
 
