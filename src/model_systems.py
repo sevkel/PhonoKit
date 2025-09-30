@@ -1,62 +1,37 @@
 __docformat__ = "google"
 
 import numpy as np
-from utils import constants
-import tmoutproc as top
+import scipy.sparse as sps
+from utils import matrix_gen as mg
+
+###
+
+# Multiply every force constant with (constants.eV2hartree / constants.ang2bohr ** 2) if needed
+
+###
 
 class Model:
     """
     Mother class for all model systems.
     """
     
-    def __init__(self, k_l_x, k_c_x, k_r_x, interact_potential="reciproke_squared", interaction_range=1, lattice_constant=3.0, atom_type="Au"):
-        self.k_c_x = k_c_x * 1#(constants.eV2hartree / constants.ang2bohr ** 2)
-        self.k_l_x = k_l_x * 1#(constants.eV2hartree / constants.ang2bohr ** 2)
-        self.k_r_x = k_r_x * 1#(constants.eV2hartree / constants.ang2bohr ** 2)
+    def __init__(self, k_coupl_x_l, k_c_x, k_coupl_x_r, interact_potential="reciproke_squared", interaction_range=1, lattice_constant=3.0, atom_type="Au"):
+        self.k_c_x = k_c_x 
+        self.k_coupl_x_l = k_coupl_x_l 
+        self.k_coupl_x_r = k_coupl_x_r
         self.interact_potential = interact_potential
         self.interaction_range = interaction_range
         self.lattice_constant = lattice_constant
         self.atom_type = atom_type
-
-    def ranged_force_constant(self):
-        """
-        Calculate ranged force constants for the 2D lattice dependend on which potential is used and on how many neighbors are coupled.
-        
-        Retruns:
-            range_force_constant (list of tuples): Ranged force constant for the 2D lattice
-        """
-
-        match self.interact_potential:
-            
-            case "reciproke_squared":
-                
-                all_k_l_x = list(enumerate((self.k_l_x * (1 / (i * self.lattice_constant)**2) for i in range(1, self.interaction_range + 1))))
-                all_k_r_x = list(enumerate((self.k_r_x * (1 / (i * self.lattice_constant)**2) for i in range(1, self.interaction_range + 1))))
-                all_k_c_x = list(enumerate((self.k_c_x * (1 / (i * self.lattice_constant)**2) for i in range(1, self.interaction_range + 1))))
-                
-                try:
-                    all_k_c_y = list(enumerate((self.k_c_y * (1 / (i * self.lattice_constant)**2) for i in range(1, self.interaction_range + 1))))
-                    all_k_c_xy =  list(enumerate((self.k_c_xy * (1 / (i * self.lattice_constant)**2) for i in range(1, self.interaction_range + 1))))
-                    all_k_l_xy = list(enumerate((self.k_l_xy * (1 / (i * self.lattice_constant)**2) for i in range(1, self.interaction_range + 1))))
-                    all_k_r_xy = list(enumerate((self.k_r_xy * (1 / (i * self.lattice_constant)**2) for i in range(1, self.interaction_range + 1))))
-                    
-                    
-                except AttributeError:
-                    return all_k_l_x, all_k_c_x, all_k_r_x
-
-
-        return all_k_l_x, all_k_c_x, all_k_r_x, all_k_c_y, all_k_c_xy, all_k_l_xy, all_k_r_xy
 
 class Chain1D(Model):
     """
     This class creates a 1D chain with a given number of atoms (N) and a given spring constant (k). Inherits from the Model class.
     """
 
-    def __init__(self, k_l, k_c, k_r, interact_potential, interaction_range, lattice_constant, atom_type, N): 
-        super().__init__(k_l, k_c, k_r, interact_potential, interaction_range, lattice_constant, atom_type)
-        #self.k_x = k_x * 1#(constants.eV2hartree / constants.ang2bohr ** 2)
+    def __init__(self, k_coupl_x_l, k_c_x, k_coupl_x_r, interact_potential, interaction_range, lattice_constant, atom_type, N): 
+        super().__init__(k_coupl_x_l, k_c_x, k_coupl_x_r, interact_potential, interaction_range, lattice_constant, atom_type)
         self.N = N
-        
         self.hessian = self.build_hessian()
 
     def build_hessian(self):
@@ -69,7 +44,10 @@ class Chain1D(Model):
         assert self.interaction_range < self.N, "Interaction range must be smaller than the number of atoms in the chain!"
 
         hessian = np.zeros((self.N, self.N), dtype=float)
-        all_k_l_x, all_k_c_x, all_k_r_x = self.ranged_force_constant()
+        
+        all_k_coupl_x_l = mg.ranged_force_constant(k_coupl_x=self.k_coupl_x_l)["k_coupl_x"]
+        all_k_c_x = mg.ranged_force_constant(k_c_x=self.k_c_x)["k_c_x"]
+        all_k_coupl_x_r = mg.ranged_force_constant(k_coupl_x=self.k_coupl_x_r)["k_coupl_x"]
 
         for i in range(self.N):
             
@@ -79,15 +57,15 @@ class Chain1D(Model):
             for j in range(self.interaction_range):
                 
                 if i + j + 1 < self.N:
-                    hessian[i, i + j + 1] = -all_k_c_x[j][1]
+                    hessian[i, i + j + 1] = -all_k_c_x[j]
                 if i - j - 1 >= 0:
-                    hessian[i, i - j - 1] = -all_k_c_x[j][1]  
+                    hessian[i, i - j - 1] = -all_k_c_x[j]
             
-            hessian[i, i] = -np.sum(hessian[i, :]) #hessian[i, i] = -np.sum(hessian[i, :]) #+ sum(all_k_c[k][1] for k in range(self.interaction_range) if atomnr - self.interaction_range <= 0)
+            hessian[i, i] = -np.sum(hessian[i, :]) 
             
             # left side
             if atomnr - self.interaction_range <= 0:
-                hessian[i, i] += sum(all_k_l_x[k][1] for k in range(self.interaction_range) if atomnr - (k + 1) <= 0)
+                hessian[i, i] += sum(all_k_coupl_x_l[k] for k in range(self.interaction_range) if atomnr - (k + 1) <= 0)
 
             
             # middle atom within interaction range
@@ -95,82 +73,32 @@ class Chain1D(Model):
                 
                 # must be case sensitive for interaction range == 1
                 if self.interaction_range == 1:
-                    hessian[i, i] += all_k_l_x[0][1]
+                    hessian[i, i] += all_k_coupl_x_l[0]
                 else:
-                    hessian[i, i] += all_k_l_x[-1][1] + all_k_r_x[-1][1] 
+                    hessian[i, i] += all_k_coupl_x_l[-1] + all_k_coupl_x_r[-1]
             
             # right side
             elif atomnr + self.interaction_range > self.N:
-                hessian[i, i] += sum(all_k_r_x[k][1] for k in range(self.interaction_range) if atomnr + (k + 1) > self.N)
+                hessian[i, i] += sum(all_k_coupl_x_r[k] for k in range(self.interaction_range) if atomnr + (k + 1) > self.N)
 
-            
-
-        #assert np.sum(hessian) == 0, "Acoustic sum rule fullfilled! Check the initialization of the hessian"
         return hessian
-     
-    def create_fake_coord_file(self, output_file="", xyz=True):
-        """
-        Creates fake coord file in xyz format as default.
-        Args:
-            output_file (String): Outputfile. If string is empty no file will be written
-            xyz (bool): Create xyz file (True) or turbomole format (False)
-
-        Returns:
-            coord_xyz
-        """
-        
-        coord_xyz = list()
-        
-        
-        for j in range(0, self.N):
-
-            tmp = np.zeros(4, dtype=object)
-            # atom_type
-            tmp[0] = self.atom_type
-            #x
-            tmp[1] = j * self.lattice_constant
-            #y
-            tmp[2] = 0
-            #z
-            tmp[3] = 0
-
-            coord_xyz.append(tmp)
-
-        coord_xyz = np.asarray(coord_xyz)
-
-        if xyz == True:
-
-            if output_file != "":
-                top.write_xyz_file(output_file, coord_xyz, "", suppress_sci_not=False)
-
-            return coord_xyz
-        
-        else:
-
-            coord_turbomole = top.x2t(coord_xyz)
-            if output_file != "":
-                top.write_coord_file(output_file, coord_turbomole)
-
-            return coord_turbomole
-
+    
 class FiniteLattice2D(Model):
     """
     This class creates a 2D finite lattice with a given number of layers (N_y) and a given number of atoms in each layer (N_x). Inherits from the Model class.
     """
 
-    def __init__(self, N_y, N_x, N_y_el_L, N_y_el_R, k_l_x, k_c_x, k_r_x, k_c_y, k_c_xy, k_l_xy, k_r_xy, interact_potential="reciproke_squared", interaction_range=1, lattice_constant=3.0, atom_type="Au"):
-        super().__init__(k_l_x, k_c_x, k_r_x, interact_potential, interaction_range, lattice_constant, atom_type)
+    def __init__(self, N_y, N_x, N_y_el_L, N_y_el_R, k_coupl_x_l, k_c_x, k_coupl_x_r, k_c_y, k_c_xy, k_coupl_xy_l, k_coupl_xy_r, interact_potential="reciproke_squared", interaction_range=1, lattice_constant=3.0, atom_type="Au"):
+        super().__init__(k_coupl_x_l, k_c_x, k_coupl_x_r, interact_potential, interaction_range, lattice_constant, atom_type)
         self.N_y = N_y
         self.N_x = N_x
         self.N_y_el_L = N_y_el_L
         self.N_y_el_R = N_y_el_R
-        self.k_c_xy = k_c_xy * 1#(constants.eV2hartree / constants.ang2bohr ** 2)
-        self.k_c_y = k_c_y * 1#(constants.eV2hartree / constants.ang2bohr ** 2)
-        self.k_l_xy = k_l_xy * 1#(constants.eV2hartree / constants.ang2bohr ** 2)
-        self.k_r_xy = k_r_xy * 1#(constants.eV2hartree / constants.ang2bohr ** 2)
         self.atom_type = atom_type
+        self.k_values_l = mg.ranged_force_constant(k_coupl_x=k_coupl_x_l, k_coupl_xy=k_coupl_xy_l)
+        self.k_values_c = mg.ranged_force_constant(k_c_x=k_c_x, k_c_y=k_c_y, k_c_xy=k_c_xy)
+        self.k_values_r = mg.ranged_force_constant(k_coupl_x=k_coupl_x_r, k_coupl_xy=k_coupl_xy_r)
         self.hessian = self.build_hessian()
-
 
     def build_hessian(self):
         """
@@ -182,8 +110,7 @@ class FiniteLattice2D(Model):
         
         assert (self.interaction_range < self.N_y or self.interaction_range < self.N_x), "Interaction range must be smaller than the number of atoms in x- and y-direction!"
         assert (self.interaction_range <= self.N_x // 2), "Interaction range must be smaller than half the number of atoms in x-direction! (In order of simplicity and physical relevance)"
-        #assert (self.N_y > 1 and self.N_x > 1), "Number of atoms in x- and y-direction must be greater than 1 otherwise take Chain1D model!"
-
+        
         def build_bulk_layers(left=False, right=False):
             """
             Building bulk submatrices until the layer where the full interaction range is reached. Returns combination of layer index from apart from the surface and its corresponding matrix.
@@ -195,7 +122,11 @@ class FiniteLattice2D(Model):
             bulk_hessians = list()
             hNNtemplate = np.zeros((2 * self.N_y, 2 * self.N_y), dtype=float)
 
-            all_k_l_x, all_k_c_x, all_k_r_x, all_k_c_y, all_k_c_xy, all_k_l_xy, all_k_r_xy = self.ranged_force_constant()
+            all_k_coupl_x_l = self.k_values_l["k_coupl_x"]
+            all_k_c_x = self.k_values_c["k_c_x"]
+            all_k_c_y = self.k_values_c["k_c_y"]
+            all_k_c_xy = self.k_values_c["k_c_xy"]
+            all_k_coupl_x_r = self.k_values_r["k_coupl_x"]
 
             
             for i in range(1, self.interaction_range + 1):
@@ -208,90 +139,90 @@ class FiniteLattice2D(Model):
                     if j % 2 == 0:
                         
                         if right != False or left != False:
-                            hNN[j, j] = sum(2 * all_k_c_x[k][1] for k in range(i)) 
-                            hNN[j, j] += sum(all_k_c_x[k][1] for k in range(i, self.interaction_range) if (self.N_x > self.interaction_range and k <= self.N_x - self.interaction_range))
+                            hNN[j, j] = sum(2 * all_k_c_x[k] for k in range(i)) 
+                            hNN[j, j] += sum(all_k_c_x[k] for k in range(i, self.interaction_range) if (self.N_x > self.interaction_range and k <= self.N_x - self.interaction_range))
                         
                             if left == True and right == False:
-                                hNN[j, j] += sum(all_k_l_x[k][1] for k in range(i, self.interaction_range))
+                                hNN[j, j] += sum(all_k_coupl_x_l[k] for k in range(i, self.interaction_range))
                             
                             elif right == True and left == False:
-                                hNN[j, j] += sum(all_k_r_x[k][1] for k in range(i, self.interaction_range))
+                                hNN[j, j] += sum(all_k_coupl_x_r[k] for k in range(i, self.interaction_range))
                                 
                         if left == False and right == False:
-                            hNN[j, j] = sum(2 * all_k_c_x[k][1] for k in range(self.interaction_range))
+                            hNN[j, j] = sum(2 * all_k_c_x[k] for k in range(self.interaction_range))
 
                         # xy-coupling
                         if j == 0 or j == hNN.shape[0] - 2:
-                            hNN[j, j] += 2 * all_k_c_xy[0][1] 
-                            hNN[j + 1, j + 1] += 2 * all_k_c_xy[0][1]
+                            hNN[j, j] += 2 * all_k_c_xy[0]
+                            hNN[j + 1, j + 1] += 2 * all_k_c_xy[0]
 
                         if j != 0 and j != hNN.shape[0] - 2 and self.N_y > 2:
-                            hNN[j, j] += 4 * all_k_c_xy[0][1]
-                            hNN[j + 1, j + 1] += 4 * all_k_c_xy[0][1]
+                            hNN[j, j] += 4 * all_k_c_xy[0]
+                            hNN[j + 1, j + 1] += 4 * all_k_c_xy[0]
                         
 
                     else:
                         # y coupling in the coupling range
                         if j == 1 or j == hNN.shape[0] - 1:
-                            hNN[j, j] = all_k_c_y[0][1] + 2 * all_k_c_xy[0][1]
+                            hNN[j, j] = all_k_c_y[0] + 2 * all_k_c_xy[0]
 
                             if j == 1:
-                                hNN[j, j + 2] = -all_k_c_y[0][1]
+                                hNN[j, j + 2] = -all_k_c_y[0]
                             else:
-                                hNN[j, j - 2] = -all_k_c_y[0][1]
+                                hNN[j, j - 2] = -all_k_c_y[0]
 
                             if self.interaction_range >= self.N_y:
                                 for k in range(1, self.N_y - 1):
-                                    hNN[j, j] += all_k_c_y[k][1]
+                                    hNN[j, j] += all_k_c_y[k]
                                     
                                     if j + 2 * (k + 1) < hNN.shape[0]:
-                                        hNN[j, j + 2 * (k + 1)] = -all_k_c_y[k][1]
+                                        hNN[j, j + 2 * (k + 1)] = -all_k_c_y[k]
                                     if j - 2 * (k + 1) >= 0:
-                                        hNN[j, j - 2 * (k + 1)] = -all_k_c_y[k][1]
+                                        hNN[j, j - 2 * (k + 1)] = -all_k_c_y[k]
 
                             else:
                                 for k in range(1, self.interaction_range):
-                                    hNN[j, j] += all_k_c_y[k][1]
+                                    hNN[j, j] += all_k_c_y[k]
                                 
                                     if j + 2 * (k + 1) < hNN.shape[0]:
-                                        hNN[j, j + 2 * (k + 1)] = -all_k_c_y[k][1]
+                                        hNN[j, j + 2 * (k + 1)] = -all_k_c_y[k]
                                     if j - 2 * (k + 1) >= 0:
-                                        hNN[j, j - 2 * (k + 1)] = -all_k_c_y[k][1]
+                                        hNN[j, j - 2 * (k + 1)] = -all_k_c_y[k]
                             
                         else:
-                            hNN[j, j] += 2 * all_k_c_y[0][1] #s+ 4 * all_k_c_xy[0][1]
+                            hNN[j, j] += 2 * all_k_c_y[0]
                             
                             if j + 2 < hNN.shape[0]:
-                                hNN[j, j + 2] = -all_k_c_y[0][1]
+                                hNN[j, j + 2] = -all_k_c_y[0]
                             if j - 2 >= 0:
-                                hNN[j, j - 2] = -all_k_c_y[0][1]
+                                hNN[j, j - 2] = -all_k_c_y[0]
 
                             atomnr = np.ceil(float(j) / 2)
 
                             if self.interaction_range >= self.N_y:
                                 for k in range(1, self.N_y - 1):
                                     if atomnr - k - 1 > 0 and atomnr + k < self.N_y:
-                                        hNN[j, j] += 2 * all_k_c_y[k][1]
+                                        hNN[j, j] += 2 * all_k_c_y[k]
                                         
                                     elif (atomnr - k - 1 <= 0 and atomnr + k < self.N_y) or (atomnr - k - 1 > 0 and atomnr + k >= self.N_y):
-                                        hNN[j, j] += all_k_c_y[k][1]
+                                        hNN[j, j] += all_k_c_y[k]
                                     
                                     if j + 2 * (k + 1) < hNN.shape[0]:
-                                        hNN[j, j + 2 * (k + 1)] = -all_k_c_y[k][1]
+                                        hNN[j, j + 2 * (k + 1)] = -all_k_c_y[k]
                                     if j - 2 * (k + 1) >= 0:
-                                        hNN[j, j - 2 * (k + 1)] = -all_k_c_y[k][1]
+                                        hNN[j, j - 2 * (k + 1)] = -all_k_c_y[k]
 
                             else:
                                 for k in range(1, self.interaction_range):
                                     if atomnr - k - 1 > 0 and atomnr + k < self.N_y:
-                                        hNN[j, j] += 2 * all_k_c_y[k][1]
+                                        hNN[j, j] += 2 * all_k_c_y[k]
                                     elif (atomnr - k - 1 <= 0 and atomnr + k < self.N_y) or (atomnr - k - 1 > 0 and atomnr + k >= self.N_y):
-                                        hNN[j, j] += all_k_c_y[k][1]
+                                        hNN[j, j] += all_k_c_y[k]
                                     
                                     if j + 2 * (k + 1) < hNN.shape[0]:
-                                        hNN[j, j + 2 * (k + 1)] = -all_k_c_y[k][1]
+                                        hNN[j, j + 2 * (k + 1)] = -all_k_c_y[k]
                                     if j - 2 * (k + 1) >= 0:
-                                        hNN[j, j - 2 * (k + 1)] = -all_k_c_y[k][1]
+                                        hNN[j, j - 2 * (k + 1)] = -all_k_c_y[k]
 
                 bulk_hessians.append((i, hNN))
                 
@@ -310,7 +241,8 @@ class FiniteLattice2D(Model):
 
             interact_layer_list = list()
             h_interact_template = np.zeros((2 * self.N_y, 2 * self.N_y), dtype=float)
-            all_k_l_x, all_k_c_x, all_k_r_x, all_k_c_y, all_k_c_xy, all_k_l_xy, all_k_r_xy = self.ranged_force_constant()
+            all_k_c_x = self.k_values_c["k_c_x"]
+            all_k_c_xy = self.k_values_c["k_c_xy"]
 
             for i in range(self.interaction_range):
                 h_interact = h_interact_template.copy()
@@ -319,23 +251,23 @@ class FiniteLattice2D(Model):
 
                     # diagonal elements x coupling
                     if j % 2 == 0:
-                        h_interact[j, j] = -all_k_c_x[i][1]
+                        h_interact[j, j] = -all_k_c_x[i]
 
                         if i == 0:
                             # xy-coupling
                             if j == 0:
-                                h_interact[j, j + 2] += -all_k_c_xy[0][1]
-                                h_interact[j + 2, j] += -all_k_c_xy[0][1]
+                                h_interact[j, j + 2] += -all_k_c_xy[0]
+                                h_interact[j + 2, j] += -all_k_c_xy[0]
 
                             elif j == h_interact.shape[0] - 2:
-                                h_interact[j + 1, j - 1] += -all_k_c_xy[0][1]
-                                h_interact[j - 1, j + 1] += -all_k_c_xy[0][1]
+                                h_interact[j + 1, j - 1] += -all_k_c_xy[0]
+                                h_interact[j - 1, j + 1] += -all_k_c_xy[0]
 
                             else:
-                                h_interact[j, j + 2] += -all_k_c_xy[0][1]
-                                h_interact[j + 2, j] += -all_k_c_xy[0][1]
-                                h_interact[j + 1, j - 1] += -all_k_c_xy[0][1]
-                                h_interact[j - 1, j + 1] += -all_k_c_xy[0][1]
+                                h_interact[j, j + 2] += -all_k_c_xy[0]
+                                h_interact[j + 2, j] += -all_k_c_xy[0]
+                                h_interact[j + 1, j - 1] += -all_k_c_xy[0]
+                                h_interact[j - 1, j + 1] += -all_k_c_xy[0]
 
 
                 interact_layer_list.append((i, h_interact))
@@ -351,117 +283,124 @@ class FiniteLattice2D(Model):
             """
             
             H_00 = np.zeros((2 * self.N_y, 2 * self.N_y), dtype=float)
-            all_k_l_x, all_k_c_x, all_k_r_x, all_k_c_y, all_k_c_xy, all_k_l_xy, all_k_r_xy = self.ranged_force_constant()
-
+            
+            all_k_coupl_x_l = self.k_values_l["k_coupl_x"]
+            all_k_coupl_x_r = self.k_values_r["k_coupl_x"]
+            all_k_coupl_xy_l = self.k_values_l["k_coupl_xy"]
+            all_k_coupl_xy_r = self.k_values_r["k_coupl_xy"]
+            all_k_c_x = self.k_values_c["k_c_x"]
+            all_k_c_y = self.k_values_c["k_c_y"]
+            all_k_c_xy = self.k_values_c["k_c_xy"]
+            
             for i in range(H_00.shape[0]):
 
                 if i % 2 == 0:
                     # x coupling in the coupling range
-                    H_00[i, i] = sum(all_k_c_x[k][1] for k in range(self.interaction_range) if (self.N_x > self.interaction_range and k <= self.N_x - self.interaction_range))
+                    H_00[i, i] = sum(all_k_c_x[k] for k in range(self.interaction_range) if (self.N_x > self.interaction_range and k <= self.N_x - self.interaction_range))
                     
                     if left == True and right == False:
-                        H_00[i, i] += sum(all_k_l_x[k][1] for k in range(self.interaction_range))
+                        H_00[i, i] += sum(all_k_coupl_x_l)
 
                     elif right == True and left == False:
-                        H_00[i, i] += sum(all_k_r_x[k][1] for k in range(self.interaction_range))
+                        H_00[i, i] += sum(all_k_coupl_x_r)
 
 
                     if i == 0 or i == H_00.shape[0] - 2:
                         # xy coupling
-                        H_00[i, i] += all_k_c_xy[0][1]
-                        H_00[i + 1, i + 1] += all_k_c_xy[0][1]
+                        H_00[i, i] += all_k_c_xy[0]
+                        H_00[i + 1, i + 1] += all_k_c_xy[0]
 
                         if left == True and right == False:
                             if self.N_y == self.N_y_el_L:
-                                H_00[i, i] += all_k_l_xy[0][1]
-                                H_00[i + 1, i + 1] += all_k_l_xy[0][1]
+                                H_00[i, i] += all_k_coupl_xy_l[0]
+                                H_00[i + 1, i + 1] += all_k_coupl_xy_l[0]
                             else:
-                                H_00[i, i] += 2 * all_k_l_xy[0][1]
-                                H_00[i + 1, i + 1] += 2 * all_k_l_xy[0][1]
+                                H_00[i, i] += 2 * all_k_coupl_xy_l[0]
+                                H_00[i + 1, i + 1] += 2 * all_k_coupl_xy_l[0]
                         
                         elif right == True and left == False:
                             if self.N_y == self.N_y_el_R:
-                                H_00[i, i] += all_k_r_xy[0][1]
-                                H_00[i + 1, i + 1] += all_k_r_xy[0][1]
+                                H_00[i, i] += all_k_coupl_xy_r[0]
+                                H_00[i + 1, i + 1] += all_k_coupl_xy_r[0]
                             else:
-                                H_00[i, i] += 2 * all_k_r_xy[0][1]
-                                H_00[i + 1, i + 1] += 2 * all_k_r_xy[0][1]
+                                H_00[i, i] += 2 * all_k_coupl_xy_r[0]
+                                H_00[i + 1, i + 1] += 2 * all_k_coupl_xy_r[0]
 
                     else:
-                        H_00[i, i] += 2 * all_k_c_xy[0][1]
-                        H_00[i + 1, i + 1] += 2 * all_k_c_xy[0][1]
+                        H_00[i, i] += 2 * all_k_c_xy[0]
+                        H_00[i + 1, i + 1] += 2 * all_k_c_xy[0]
 
                         if left == True and right == False:
-                            H_00[i, i] += 2 * all_k_l_xy[0][1]
-                            H_00[i + 1, i + 1] += 2 * all_k_l_xy[0][1]
+                            H_00[i, i] += 2 * all_k_coupl_xy_l[0]
+                            H_00[i + 1, i + 1] += 2 * all_k_coupl_xy_l[0]
 
                         elif right == True and left == False:
-                            H_00[i, i] += 2 * all_k_r_xy[0][1]
-                            H_00[i + 1, i + 1] += 2 * all_k_r_xy[0][1]
+                            H_00[i, i] += 2 * all_k_coupl_xy_r[0]
+                            H_00[i + 1, i + 1] += 2 * all_k_coupl_xy_r[0]
 
                     
                 else:
                     # y coupling in the coupling range, first and last k_y, rest 2 * k_c_y
                     if i == 1 or i == H_00.shape[0] - 1:
 
-                        H_00[i, i] += all_k_c_y[0][1]
+                        H_00[i, i] += all_k_c_y[0]
                         if i == 1:
-                            H_00[i, i + 2] = -all_k_c_y[0][1]
+                            H_00[i, i + 2] = -all_k_c_y[0]
                         else:
-                            H_00[i, i - 2] = -all_k_c_y[0][1]
+                            H_00[i, i - 2] = -all_k_c_y[0]
 
                         if self.interaction_range >= self.N_y:
                             for k in range(1, self.N_y - 1):
-                                H_00[i, i] += all_k_c_y[k][1]
+                                H_00[i, i] += all_k_c_y[k]
                                 
                                 if i + 2 * (k + 1) < H_00.shape[0]:
-                                    H_00[i, i + 2 * (k + 1)] = -all_k_c_y[k][1]
+                                    H_00[i, i + 2 * (k + 1)] = -all_k_c_y[k]
                                 if i - 2 * (k + 1) >= 0:
-                                    H_00[i, i - 2 * (k + 1)] = -all_k_c_y[k][1]
+                                    H_00[i, i - 2 * (k + 1)] = -all_k_c_y[k]
 
                         else:
                             for k in range(1, self.interaction_range):
-                                H_00[i, i] += all_k_c_y[k][1]
+                                H_00[i, i] += all_k_c_y[k]
                             
                                 if i + 2 * (k + 1) < H_00.shape[0]:
-                                    H_00[i, i + 2 * (k + 1)] = -all_k_c_y[k][1]
+                                    H_00[i, i + 2 * (k + 1)] = -all_k_c_y[k]
                                 if i - 2 * (k + 1) >= 0:
-                                    H_00[i, i - 2 * (k + 1)] = -all_k_c_y[k][1]
+                                    H_00[i, i - 2 * (k + 1)] = -all_k_c_y[k]
                         
                     else:
-                        H_00[i, i] += 2 * all_k_c_y[0][1]
+                        H_00[i, i] += 2 * all_k_c_y[0]
                         
                         if i + 2 < H_00.shape[0]:
-                            H_00[i, i + 2] = -all_k_c_y[0][1]
+                            H_00[i, i + 2] = -all_k_c_y[0]
                         if i - 2 >= 0:
-                            H_00[i, i - 2] = -all_k_c_y[0][1]
+                            H_00[i, i - 2] = -all_k_c_y[0]
 
                         atomnr = np.ceil(float(i) / 2)
 
                         if self.interaction_range >= self.N_y:
                             for k in range(1, self.N_y - 1):
                                 if atomnr - k - 1 > 0 and atomnr + k < self.N_y:
-                                    H_00[i, i] += 2 * all_k_c_y[k][1]
+                                    H_00[i, i] += 2 * all_k_c_y[k]
                                     
                                 elif (atomnr - k - 1 <= 0 and atomnr + k < self.N_y) or (atomnr - k - 1 > 0 and atomnr + k >= self.N_y):
-                                    H_00[i, i] += all_k_c_y[k][1]
+                                    H_00[i, i] += all_k_c_y[k]
                                 
                                 if i + 2 * (k + 1) < H_00.shape[0]:
-                                    H_00[i, i + 2 * (k + 1)] = -all_k_c_y[k][1]
+                                    H_00[i, i + 2 * (k + 1)] = -all_k_c_y[k]
                                 if i - 2 * (k + 1) >= 0:
-                                    H_00[i, i - 2 * (k + 1)] = -all_k_c_y[k][1]
+                                    H_00[i, i - 2 * (k + 1)] = -all_k_c_y[k]
 
                         else:
                             for k in range(1, self.interaction_range):
                                 if atomnr - k - 1 > 0 and atomnr + k < self.N_y:
-                                    H_00[i, i] += 2 * all_k_c_y[k][1]
+                                    H_00[i, i] += 2 * all_k_c_y[k]
                                 elif (atomnr - k - 1 <= 0 and atomnr + k < self.N_y) or (atomnr - k - 1 > 0 and atomnr + k >= self.N_y):
-                                    H_00[i, i] += all_k_c_y[k][1]
+                                    H_00[i, i] += all_k_c_y[k]
                                 
                                 if i + 2 * (k + 1) < H_00.shape[0]:
-                                    H_00[i, i + 2 * (k + 1)] = -all_k_c_y[k][1]
+                                    H_00[i, i + 2 * (k + 1)] = -all_k_c_y[k]
                                 if i - 2 * (k + 1) >= 0:
-                                    H_00[i, i - 2 * (k + 1)] = -all_k_c_y[k][1]
+                                    H_00[i, i - 2 * (k + 1)] = -all_k_c_y[k]
             
             return H_00
 
@@ -469,8 +408,13 @@ class FiniteLattice2D(Model):
         if self.N_y == 1:
             hessian = np.zeros((2 * self.N_y * self.N_x, 2 * self.N_y * self.N_x), dtype=float)
 
-            all_k_l_x, all_k_c_x, all_k_r_x, all_k_c_y, all_k_c_xy, all_k_l_xy, all_k_r_xy = self.ranged_force_constant()
+            all_k_coupl_x_l = self.k_values_l["k_coupl_x"]
+            all_k_coupl_x_r = self.k_values_r["k_coupl_x"]
+            all_k_coupl_xy_l = self.k_values_l["k_coupl_xy"]
+            all_k_coupl_xy_r = self.k_values_r["k_coupl_xy"]
 
+            all_k_c_x = self.k_values_c["k_c_x"]
+        
             # 1D chain as 2D lattice
             for i in range(self.N_x):
                 
@@ -480,38 +424,38 @@ class FiniteLattice2D(Model):
                 for j in range(self.interaction_range):
                     
                     if i + j + 1 < self.N_x:
-                        hessian[2 * i, 2 * (i + j + 1)] = -all_k_c_x[j][1]
+                        hessian[2 * i, 2 * (i + j + 1)] = -all_k_c_x[j]
                     if i - j - 1 >= 0:
-                        hessian[2 * i, 2 * (i - j - 1)] = -all_k_c_x[j][1]
+                        hessian[2 * i, 2 * (i - j - 1)] = -all_k_c_x[j]
 
                 hessian[2 * i, 2 * i] = -np.sum(hessian[2 * i, :])
                 
                 if atomnr == 1 or atomnr == self.N_x:
                     #xy coupling to the electrodes
                     if atomnr == 1 and self.N_y_el_L > 1:   
-                        hessian[2 * i, 2 * i] += 2 * all_k_l_xy[0][1]
-                        hessian[2 * i + 1, 2 * i + 1] += 2 * all_k_l_xy[0][1]
+                        hessian[2 * i, 2 * i] += 2 * all_k_coupl_xy_l[0]
+                        hessian[2 * i + 1, 2 * i + 1] += 2 * all_k_coupl_xy_l[0]
                         
                     elif atomnr == self.N_x and self.N_y_el_R > 1:
-                        hessian[2 * i, 2 * i] += 2 * all_k_r_xy[0][1]
-                        hessian[2 * i + 1, 2 * i + 1] += 2 * all_k_r_xy[0][1]
+                        hessian[2 * i, 2 * i] += 2 * all_k_coupl_xy_r[0]
+                        hessian[2 * i + 1, 2 * i + 1] += 2 * all_k_coupl_xy_r[0]
 
                 # left side
                 if atomnr - self.interaction_range <= 0:
-                    hessian[2 * i, 2 * i] += sum(all_k_l_x[k][1] for k in range(self.interaction_range) if atomnr - (k + 1) <= 0)
+                    hessian[2 * i, 2 * i] += sum(all_k_coupl_x_l[k] for k in range(self.interaction_range) if atomnr - (k + 1) <= 0)
                 
                 # middle atom within interaction range
                 elif atomnr - self.interaction_range == 0 and atomnr + self.interaction_range >= self.N_x:
                     
                     # must be case sensitive for interaction range == 1
                     if self.interaction_range == 1:
-                        hessian[2 * i, 2 * i] += all_k_l_x[0][1]
+                        hessian[2 * i, 2 * i] += all_k_coupl_x_l[0]
                     else:
-                        hessian[2 * i, 2 * i] += all_k_l_x[-1][1] + sum(all_k_r_x[-k][1] for k in range(self.N_x - atomnr, self.interaction_range))
+                        hessian[2 * i, 2 * i] += all_k_coupl_x_l[-1] + sum(all_k_coupl_x_r[-k] for k in range(self.N_x - atomnr, self.interaction_range))
                 
                 # right side
                 elif atomnr + self.interaction_range > self.N_x:
-                    hessian[2 * i, 2 * i] += sum(all_k_r_x[k][1] for k in range(self.interaction_range) if atomnr + (k + 1) > self.N_x)
+                    hessian[2 * i, 2 * i] += sum(all_k_coupl_x_r[k] for k in range(self.interaction_range) if atomnr + (k + 1) > self.N_x)
 
             return hessian
 
@@ -549,8 +493,6 @@ class FiniteLattice2D(Model):
                             hessian[i * H_00_r.shape[0]: i * H_00_r.shape[0] + H_00_r.shape[0], 
                                     (i - j - 1) * H_00_r.shape[0]: (i - j - 1) * H_00_r.shape[0] + H_00_r.shape[0]] = layer_interactions[j][1]
                         
-
-
             #bulk layers + interaction
             elif i <= len(bulk_layers_l) and i < self.N_x // 2:
                 hessian[i * H_00_l.shape[0]: i * H_00_l.shape[0] + H_00_l.shape[0], 
@@ -591,56 +533,8 @@ class FiniteLattice2D(Model):
                         hessian[i * H_00_l.shape[0]: i * H_00_l.shape[0] + H_00_l.shape[0], 
                                 (i + j + 1) * H_00_l.shape[0]: (i + j + 1) * H_00_l.shape[0] + H_00_l.shape[0]] = layer_interactions[j][1]
                 
-
-
-        #Check if acoustic sum rule is fulfilled or not
-        #assert np.abs(np.sum(hessian)) < 1E-12, "Acoustic sum rule fullfilled! Check the initialization of the hessian" #Must not be fulfilled anymore
         return hessian
 
-    def create_fake_coord_file(self, output_file="", xyz=True):
-        """
-        Creates fake coord file in xyz format as default.
-        Args:
-            output_file (String): Outputfile. If the string is empty no file will be written.
-            xyz (bool): Create xyz file (True) or turbomole format (False)
-
-        Returns:
-            coord_xyz
-        """
-
-        coord_xyz = list()
-        
-        for i in range(0, self.N_y):
-            for j in range(0,self.N_x):
-
-                tmp = np.zeros(4, dtype=object)
-                
-                tmp[0] = self.atom_type
-                #x
-                tmp[1] = j * self.lattice_constant
-                #y
-                tmp[2] = i * self.lattice_constant
-                #z
-                tmp[3] = 0
-
-                coord_xyz.append(tmp)
-
-        coord_xyz = np.asarray(coord_xyz)
-
-        if xyz == True:
-
-            if output_file != "":
-                top.write_xyz_file(output_file, coord_xyz, "", suppress_sci_not=False)
-
-            return coord_xyz
-        
-        else:
-
-            coord_turbomole = top.x2t(coord_xyz)
-            if output_file != "":
-                top.write_coord_file(output_file, coord_turbomole)
-
-            return coord_turbomole
 
 
 if __name__ == '__main__':

@@ -2,13 +2,14 @@
     
     "CALCULATION": {
 
-        "data_path": "C://Users//sevke//Desktop//Dev//MA//phonokit//plot",
+        "data_path": "C://Users//sevke//Desktop//Dev//MA//phonokit//plot//tests_v2",
+        "sys_descr": "newCodeTest",
 
         "M_L": "Au",
         "M_R": "Au",
         "M_C": "Au",
         "E_D": 80,
-        "N": 2000,
+        "N": 1000,
         "T_min": 0.001,
         "T_max": 300,
         "kappa_grid_points": 1000,
@@ -19,14 +20,14 @@
 
         "DebeyeModel": {
             "enabled": false,
-            "k_x": 900,
-            "k_xy": 0
+            "k_coupl_x": 900,
+            "k_coupl_xy": 0
         },
 
         "Chain1D": {
             "enabled": false,
-            "k_x": 900,
-            "k_c": 900,
+            "k_el_x": 900,
+            "k_coupl_x": 900,
             "interaction_range": 1,
             "interact_potential": "reciproke_squared",
             "atom_type": "Au",
@@ -35,27 +36,41 @@
 
         "Ribbon2D": {
             "enabled": true,
-            "N": 750,
             "N_y": 3,
-            "k_x": 900,
-            "k_y": 900,
-            "k_xy": 180,
-            "k_c": 900,
-            "k_c_xy": 180,
+            "k_el_x": 900,
+            "k_el_y": 900,
+            "k_el_xy": 90,
+            "k_coupl_x": 900,
+            "k_coupl_xy": 90,
             "interaction_range": 1,
             "interact_potential": "reciproke_squared",
             "atom_type": "Au",
             "lattice_constant": 3.0
         },
 
-        "InfiniteFourier2D": {
+        "AnalyticalFourier": {
             "enabled": false,
             "N_q": 750,
-            "k_x": 900,
-            "k_y": 900,
-            "k_xy": 180,
-            "k_c": 900,
-            "k_c_xy": 180,
+            "k_el_x": 900,
+            "k_el_y": 900,
+            "k_el_xy": 0,
+            "k_coupl_x": 900,
+            "k_coupl_xy": 90,
+            "interaction_range": 1,
+            "interact_potential": "reciproke_squared",
+            "atom_type": "Au",
+            "lattice_constant": 3.0
+        },
+
+        "DecimationFourier": {
+            "enabled": false,
+            "N_y": 3,
+            "N_q": 10,
+            "k_el_x": 900,
+            "k_el_y": 900,
+            "k_el_xy": 90,
+            "k_coupl_x": 900,
+            "k_coupl_xy": 90,
             "interaction_range": 1,
             "interact_potential": "reciproke_squared",
             "atom_type": "Au",
@@ -63,48 +78,61 @@
         }
     },
 
-        "ELECTRODE_R": {
+    "ELECTRODE_R": {
 
         "DebeyeModel": {
             "enabled": false,
-            "k_x": 900,
-            "k_xy": 0
+            "k_coupl_x": 900,
+            "k_coupl_xy": 0
         },
 
         "Chain1D": {
             "enabled": false,
-            "k_x": 900,
-            "k_c": 900,
+            "k_el_x": 900,
+            "k_coupl_x": 900,
             "interaction_range": 1,
             "interact_potential": "reciproke_squared",
             "atom_type": "Au",
             "lattice_constant": 3.0
-
         },
         
         "Ribbon2D": {
             "enabled": true,
-            "N": 750,
             "N_y": 3,
-            "k_x": 900,
-            "k_y": 900,
-            "k_xy": 180,
-            "k_c": 900,
-            "k_c_xy": 180,
+            "k_el_x": 900,
+            "k_el_y": 900,
+            "k_el_xy": 90,
+            "k_coupl_x": 900,
+            "k_coupl_xy": 90,
             "interaction_range": 1,
             "interact_potential": "reciproke_squared",
             "atom_type": "Au",
             "lattice_constant": 3.0
-            
         },
-        "InfiniteFourier2D": {
+
+        "AnalyticalFourier": {
             "enabled": false,
-            "N_q": 750,
-            "k_x": 900,
-            "k_y": 900,
-            "k_xy": 0,
-            "k_c": 900,
-            "k_c_xy": 0,
+            "N_q": 50,
+            "k_el_x": 900,
+            "k_el_y": 900,
+            "k_el_xy": 90,
+            "k_coupl_x": 900,
+            "k_coupl_xy": 90,
+            "interaction_range": 1,
+            "interact_potential": "reciproke_squared",
+            "atom_type": "Au",
+            "lattice_constant": 3.0
+        },
+
+        "DecimationFourier": {
+            "enabled": false,
+            "N_y": 3,
+            "N_q": 10,
+            "k_el_x": 900,
+            "k_el_y": 900,
+            "k_el_xy": 90,
+            "k_coupl_x": 900,
+            "k_coupl_xy": 90,
             "interaction_range": 1,
             "interact_potential": "reciproke_squared",
             "atom_type": "Au",
@@ -116,8 +144,8 @@
 
         "Chain1D": {
             "enabled": false,
-            "N": 2,
-            "k_x": 900,
+            "N": 3,
+            "k_c_x": 900,
             "lattice_constant": 3.0,
             "interaction_range": 1,
             "interact_potential": "reciproke_squared",
@@ -128,9 +156,9 @@
             "enabled": true,
             "N_y": 1,
             "N_x": 2,
-            "k_x": 900,
-            "k_y": 900,
-            "k_xy": 180,
+            "k_c_x": 900,
+            "k_c_y": 900,
+            "k_c_xy": 90,
             "lattice_constant": 3.0,
             "interaction_range": 1,
             "interact_potential": "reciproke_squared",
@@ -139,6 +167,7 @@
     },
 
     "data_output": {
-        "plot_transmission": false
+        "plot_transmission": false,
+        "plot_dos": false
     }
 }
