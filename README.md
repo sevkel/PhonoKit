@@ -1,6 +1,6 @@
 # PhonoKit
 
-
+![](https://git.rz.uni-augsburg.de/theo1-git/phonokit/-/blob/c47d2a070ae8fdf5f9c980b7f703a74137a3d792/example.png)
 
 Phononic transmission calculation for different model configurations of electrodes and the scattering region.
 Using the 
