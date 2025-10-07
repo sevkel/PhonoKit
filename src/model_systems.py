@@ -1,18 +1,32 @@
 __docformat__ = "google"
 
 import numpy as np
-import scipy.sparse as sps
 from utils import matrix_gen as mg
 
-###
-
-# Multiply every force constant with (constants.eV2hartree / constants.ang2bohr ** 2) if needed.
-
-###
+# Multiply every force constant with (constants.eV2hartree / constants.ang2bohr ** 2) if needed
 
 class Model:
     """
-    Mother class for all model systems.
+    Mother class for setting up several model systems.
+
+    Args:
+        k_coupl_x_l (float): Coupling constant between left (l) electrode and central part.
+        k_c_x (float): Coupling constant within the central part.
+        k_coupl_x_r (float): Coupling constant between right (r) electrode and central part.
+        interact_potential (str): Interaction potential.
+        interaction_range (int): Interaction range (nearest neighbours etc.).
+        lattice_constant (float): Lattice constant.
+        atom_type (str): Atom type within the central part.
+
+    Attributes:
+        k_coupl_x_l (float): Coupling constant between left (l) electrode and central part.
+        k_c_x (float): Coupling constant within the central part.
+        k_coupl_x_r (float): Coupling constant between right (r) electrode and central part.
+        interact_potential (str): Interaction potential.
+        interaction_range (int): Interaction range (nearest neighbours etc.).
+        lattice_constant (float): Lattice constant.
+        atom_type (str): Atom type within the central part.
+
     """
     
     def __init__(self, k_coupl_x_l, k_c_x, k_coupl_x_r, interact_potential="reciproke_squared", interaction_range=1, lattice_constant=3.0, atom_type="Au"):
@@ -27,14 +41,23 @@ class Model:
 class Chain1D(Model):
     """
     This class creates a 1D chain with a given number of atoms (N) and a given spring constant (k). Inherits from the Model class.
+
+    Args:
+        Model (object): Inherits arguments from Model class.
+
+    Attributes
+        All attributes of Model motherclass.
+        N (int): Length of the chain length (Number of connected atoms in x-direction).
+        hessian (np.ndarray): Hessian matrix of the central part.
+
     """
 
     def __init__(self, k_coupl_x_l, k_c_x, k_coupl_x_r, interact_potential, interaction_range, lattice_constant, atom_type, N): 
         super().__init__(k_coupl_x_l, k_c_x, k_coupl_x_r, interact_potential, interaction_range, lattice_constant, atom_type)
         self.N = N
-        self.hessian = self.build_hessian()
+        self.hessian = self._build_hessian()
 
-    def build_hessian(self):
+    def _build_hessian(self) -> np.ndarray:
         """Build the hessian matrix for a 1D chain.
 
         Returns:
@@ -67,7 +90,6 @@ class Chain1D(Model):
             if atomnr - self.interaction_range <= 0:
                 hessian[i, i] += sum(all_k_coupl_x_l[k] for k in range(self.interaction_range) if atomnr - (k + 1) <= 0)
 
-            
             # middle atom within interaction range
             elif atomnr - self.interaction_range == 0 and atomnr + self.interaction_range >= self.N:
                 
@@ -85,42 +107,74 @@ class Chain1D(Model):
     
 class FiniteLattice2D(Model):
     """
-    This class creates a 2D finite lattice with a given number of layers (N_y) and a given number of atoms in each layer (N_x). Inherits from the Model class.
+    This class creates a 2D finite lattice with a given number of atoms (N_x, N_y). Inherits from the Model class.
+
+    Args:
+        Model (object): Inherits arguments from Model class.
+        N_x (int): Number of atoms in x-direction.
+        N_y (int): Number of atoms in y-direction.
+        N_y_el_L (int): Number of electrons in the left (L) electrode (y-direction).
+        N_y_el_R (int): Number of electrons in the left (R) electrode (y-direction).
+        k_c_y (float): Coupling constant within the central part in y-direction.
+        k_c_xy (float): Coupling constant within the central part in xy-direction.
+        k_coupl_xy_l (float): Coupling constant between left electrode and center in xy-direction.
+        k_coupl_xy_r (float): Coupling constant between right electrode and center in xy-direction.
+
+
+    Attributes:
+        All attributes of Model motherclass.
+        N_x (int): Number of atoms in x-direction.
+        N_y (int): Number of atoms in y-direction.
+        N_y_el_L (int): Number of electrons in the left (L) electrode (y-direction).
+        N_y_el_R (int): Number of electrons in the left (R) electrode (y-direction).
+        k_c_y (float): Coupling constant within the central part in y-direction.
+        k_c_xy (float): Coupling constant within the central part in xy-direction.
+        k_coupl_xy_l (float): Coupling constant between left electrode and center in xy-direction.
+        k_coupl_xy_r (float): Coupling constant between right electrode and center in xy-direction.
+
     """
 
-    def __init__(self, N_y, N_x, N_y_el_L, N_y_el_R, k_coupl_x_l, k_c_x, k_coupl_x_r, k_c_y, k_c_xy, k_coupl_xy_l, k_coupl_xy_r, interact_potential="reciproke_squared", interaction_range=1, lattice_constant=3.0, atom_type="Au"):
+    def __init__(self, N_y, N_x, N_y_el_L, N_y_el_R, k_coupl_x_l, k_c_x, k_coupl_x_r, k_c_y, k_c_xy, k_coupl_xy_l, k_coupl_xy_r, 
+                 interact_potential="reciproke_squared", interaction_range=1, lattice_constant=3.0, atom_type="Au"):
         super().__init__(k_coupl_x_l, k_c_x, k_coupl_x_r, interact_potential, interaction_range, lattice_constant, atom_type)
-        self.N_y = N_y
         self.N_x = N_x
+        self.N_y = N_y
         self.N_y_el_L = N_y_el_L
         self.N_y_el_R = N_y_el_R
         self.atom_type = atom_type
         self.k_values_l = mg.ranged_force_constant(k_coupl_x=k_coupl_x_l, k_coupl_xy=k_coupl_xy_l)
         self.k_values_c = mg.ranged_force_constant(k_c_x=k_c_x, k_c_y=k_c_y, k_c_xy=k_c_xy)
         self.k_values_r = mg.ranged_force_constant(k_coupl_x=k_coupl_x_r, k_coupl_xy=k_coupl_xy_r)
-        self.hessian = self.build_hessian()
+        self.hessian = self._build_hessian()
 
-    def build_hessian(self):
+    def _build_hessian(self) -> np.ndarray:
         """
-        Build the hessinan matrix for a 2D lattice including variable neighbor coupling.
+        Build the hessinan matrix for a 2D finite lattice including variable neighbor coupling/interaction range.
 
         Returns:
             hessian (np.ndarray): Hessian matrix of shape (2 * N_y * N_x, 2 * N_y * N_x)
         """
         
-        assert (self.interaction_range < self.N_y or self.interaction_range < self.N_x), "Interaction range must be smaller than the number of atoms in x- and y-direction!"
-        assert (self.interaction_range <= self.N_x // 2), "Interaction range must be smaller than half the number of atoms in x-direction! (In order of simplicity and physical relevance)"
+        assert (self.interaction_range < self.N_y or self.interaction_range < self.N_x), (
+            "Interaction range must be smaller than the number of atoms in x- and y-direction!"
+        )
+        assert (self.interaction_range <= self.N_x // 2), (
+            "Interaction range must be smaller than half the number of atoms in x-direction! (In order of simplicity and physical relevance)"
+        )
         
-        def build_bulk_layers(left=False, right=False):
+        def build_bulk_layers(left=False, right=False) -> list[tuple[int, np.ndarray]]:
             """
             Building bulk submatrices until the layer where the full interaction range is reached. Returns combination of layer index from apart from the surface and its corresponding matrix.
+
+            Args:
+                left, right (bool): Flag for which electrode the coupling is needed.
             
             Returns:
                 List of tuples: Contains combination of layer index from apart from the surface and its corresponding matrix as np.ndarray.
+
             """
 
             bulk_hessians = list()
-            hNNtemplate = np.zeros((2 * self.N_y, 2 * self.N_y), dtype=float)
 
             all_k_coupl_x_l = self.k_values_l["k_coupl_x"]
             all_k_c_x = self.k_values_c["k_c_x"]
@@ -128,10 +182,9 @@ class FiniteLattice2D(Model):
             all_k_c_xy = self.k_values_c["k_c_xy"]
             all_k_coupl_x_r = self.k_values_r["k_coupl_x"]
 
-            
             for i in range(1, self.interaction_range + 1):
 
-                hNN = hNNtemplate.copy()
+                hNN = np.zeros((2 * self.N_y, 2 * self.N_y), dtype=float)
 
                 for j in range(hNN.shape[0]):
 
@@ -231,21 +284,21 @@ class FiniteLattice2D(Model):
                             
             return bulk_hessians
         
-        def build_layer_interactions():
+        def build_layer_interactions() -> list[tuple[int, np.ndarray]]:
             """
             Builds interaction matrices for the layers in the x-direction. The interaction range is taken into account.
 
             Returns:
                 List of tuples: Contains combination of layer index and its corresponding interaction matrix as np.ndarray.
+
             """
 
             interact_layer_list = list()
-            h_interact_template = np.zeros((2 * self.N_y, 2 * self.N_y), dtype=float)
             all_k_c_x = self.k_values_c["k_c_x"]
             all_k_c_xy = self.k_values_c["k_c_xy"]
 
             for i in range(self.interaction_range):
-                h_interact = h_interact_template.copy()
+                h_interact = np.zeros((2 * self.N_y, 2 * self.N_y), dtype=float)
             
                 for j in range(h_interact.shape[0]):
 
@@ -274,7 +327,7 @@ class FiniteLattice2D(Model):
 
             return interact_layer_list
         
-        def build_H_00(left=False, right=False):
+        def build_H_00(left=False, right=False) -> np.ndarray:
             """
             Build the hessian matrix for the first layer. The interaction range is taken into account.
             
@@ -406,16 +459,15 @@ class FiniteLattice2D(Model):
 
         # special case: 1D chain in 2D
         if self.N_y == 1:
-            hessian = np.zeros((2 * self.N_y * self.N_x, 2 * self.N_y * self.N_x), dtype=float)
 
+            hessian = np.zeros((2 * self.N_y * self.N_x, 2 * self.N_y * self.N_x), dtype=float)
             all_k_coupl_x_l = self.k_values_l["k_coupl_x"]
             all_k_coupl_x_r = self.k_values_r["k_coupl_x"]
             all_k_coupl_xy_l = self.k_values_l["k_coupl_xy"]
             all_k_coupl_xy_r = self.k_values_r["k_coupl_xy"]
-
             all_k_c_x = self.k_values_c["k_c_x"]
         
-            # 1D chain as 2D lattice
+            ### -------------- START 1D chain as 2D lattice -------------- ###
             for i in range(self.N_x):
                 
                 atomnr = i + 1
@@ -458,6 +510,8 @@ class FiniteLattice2D(Model):
                     hessian[2 * i, 2 * i] += sum(all_k_coupl_x_r[k] for k in range(self.interaction_range) if atomnr + (k + 1) > self.N_x)
 
             return hessian
+        
+         ### -------------- END 1D Chain case -------------- ###
 
         layer_interactions = build_layer_interactions()
         H_00_l = build_H_00(left=True, right=False)
@@ -534,7 +588,6 @@ class FiniteLattice2D(Model):
                                 (i + j + 1) * H_00_l.shape[0]: (i + j + 1) * H_00_l.shape[0] + H_00_l.shape[0]] = layer_interactions[j][1]
                 
         return hessian
-
 
 
 if __name__ == '__main__':

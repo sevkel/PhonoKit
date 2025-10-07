@@ -1,3 +1,5 @@
+__docformat__ = "google"
+
 import numpy as np
 
 def ranged_force_constant(
@@ -12,23 +14,27 @@ def ranged_force_constant(
     Only couplings !=0 are not taken into account.
     
     Args: 
-        k_el_x (float): coupling in x within the electrode
-        k_coupl_x (float): coupling in x from a electrode (L/R) to the center
-        k_c_x (float): coupling in x withing the center part 
+        k_el_x (float): coupling in x within the electrode.
+        k_coupl_x (float): coupling in x from a electrode (L/R) to the center.
+        k_c_x (float): coupling in x withing the center part.
 
-        k_el_y (float): coupling in y within the electrode
-        k_c_y (float): coupling in y withing the center part 
+        k_el_y (float): coupling in y within the electrode.
+        k_c_y (float): coupling in y withing the center part.
 
-        k_el_xy (float): coupling in xy within the electrode
-        k_coupl_xy (float): coupling in xy from a electrode (L/R) to the center
-        k_c_xy (float): coupling in xy within the center part 
+        k_el_xy (float): coupling in xy within the electrode.
+        k_coupl_xy (float): coupling in xy from a electrode (L/R) to the center.
+        k_c_xy (float): coupling in xy within the center part. 
 
-        lattice_constant (float): lattice constant of the material
-        interaction_range (int): interaction range in units of lattice constant
-        interact_potential (str): interaction potential, currently only "reciproke_squared" implemented
+        lattice_constant (float): lattice constant of the material.
+        interaction_range (int): interaction range in units of lattice constant.
+        interact_potential (str): interaction potential, currently only "reciproke_squared" implemented.
 
     Returns:
-        dict: containing ranged force-constants only for non-zero couplings
+        Ranged force constants (dict): containing ranged force-constants only for non-zero couplings.
+
+    Raises: 
+        ValueError: If 'interact_potential' is a unallowed string.
+
     """
 
     if interact_potential != "reciproke_squared":
@@ -57,25 +63,26 @@ def ranged_force_constant(
     
     return results
 
-def build_H_NN(N_y, interaction_range, k_values):
+def build_H_NN(N_y, interaction_range, k_values) -> np.ndarray:
     """
     Build up an actual bulk layer of the electrode. The coupling includes options for x, y and xy coupling. 
     The coupling range is defined by the parameter interaction range.
     
     Args:
-        N_y: Number of atoms in y-direction
-        interaction_range: Interaction range
-        k_values: Dictionary with force constants (from ranged_force_constant function)
+        N_y (int, float): Number of atoms in y-direction.
+        interaction_range (int, float): Interaction range.
+        k_values (dict): Dictionary with force constants (from ranged_force_constant function).
 
     Returns: 
-        np.array: Principal layer with force constants
+        H_NN (np.ndarray): Principal bulk layer with force constants.
+
     """
     
     all_k_x = k_values.get("k_el_x", [])
     all_k_y = k_values.get("k_el_y", []) 
     all_k_xy = k_values.get("k_el_xy", [])
 
-    hNN = np.zeros((2 * N_y * interaction_range, 2 * N_y * interaction_range))
+    hNN = np.zeros((2 * N_y * interaction_range, 2 * N_y * interaction_range), dtype=float)
 
     #build Hessian matrix for the hNN principal bulklayer
 
@@ -258,19 +265,25 @@ def build_H_NN(N_y, interaction_range, k_values):
 
     return hNN
 
-def build_H_00(N_y, interaction_range, k_values):
+def build_H_00(N_y, interaction_range, k_values) -> np.ndarray:
     """
     Build the hessian matrix for the first layer. The interaction range is taken into account.
     
+    Args:
+        N_y (int, float): Number of atoms in y-direction.
+        interaction_range (int, float): Interaction range.
+        k_values (dict): Dictionary with force constants (from ranged_force_constant function).
+
     Returns:
-        H_00 (np.ndarray): Hessian matrix of shape (2 * N_y, 2 * N_y)
+        H_00 (np.ndarray): Surface Principal Layer with force constants.
+
     """
 
     all_k_x = k_values.get("k_el_x", [])
     all_k_y = k_values.get("k_el_y", []) 
     all_k_xy = k_values.get("k_el_xy", [])
 
-    h00 = np.zeros((2 * N_y * interaction_range, 2 * N_y * interaction_range))
+    h00 = np.zeros((2 * N_y * interaction_range, 2 * N_y * interaction_range), dtype=float)
 
     #build Hessian matrix for the h00 principal surface layer
 
@@ -489,9 +502,18 @@ def build_H_00(N_y, interaction_range, k_values):
 
     return h00
 
-def build_H_01(N_y, interaction_range, k_values):
+def build_H_01(N_y, interaction_range, k_values) -> np.ndarray:
     """
     Build the hessian matrix for the interaction between two princial layers. The interaction range is taken into account.
+
+    Args:
+        N_y (int, float): Number of atoms in y-direction.
+        interaction_range (int, float): Interaction range.
+        k_values (dict): Dictionary with force constants (from ranged_force_constant function).
+
+    Returns:
+        H_01 (np.ndarray): Interaction between two adjustant principal layers.
+
     """
 
     all_k_x = k_values.get("k_el_x", [])
@@ -551,3 +573,104 @@ def build_H_01(N_y, interaction_range, k_values):
                                                 
 
     return h01
+
+def calc_center_coupl(N_y, N_y_scatter, interaction_range, k_values) -> np.ndarray:
+    """
+    Generate the coupling matrix of one electrode to the central part. Interaction range is taken into account!
+    Needed for the coupling within the Dyson equation when building the electrode.
+
+    Args:
+        N_y (int, float): Number of atoms in y-direction for the electrode.
+        N_y_scatter (int, float): Number of atoms in y-direction for the central part.
+        interaction_range (int, float): Interaction range.
+        k_values (dict): Dictionary with force constants (from ranged_force_constant function).
+
+    Returns:
+        k_LR_C (np.ndarray): Coupling matrix between the electrode and the central part.
+
+    """
+
+    k_LR_C = np.zeros((2 * N_y * interaction_range, 2 * N_y * interaction_range), dtype=float)
+    all_k_coupl_x = k_values["k_coupl_x"]
+    all_k_coupl_xy = k_values["k_coupl_xy"]
+        
+    interaction_layers_dict = dict()
+
+    for i in range(interaction_range):
+        
+        interaction_layer = np.zeros((2 * N_y, 2 * N_y), dtype=float)
+        
+        #if i == 0: # direct NN layer
+        for j in range(interaction_layer.shape[0]):
+            
+            if j % 2 == 0:
+                atomnr = np.ceil(float(j + 1) / 2)
+                
+                if atomnr == ((N_y - N_y_scatter) // 2) or atomnr == ((N_y - N_y_scatter) // 2) + N_y_scatter + 1:
+                    
+                    if i == 0:
+                        interaction_layer[j, j] += -all_k_coupl_xy[0]
+                        interaction_layer[j + 1, j + 1] += -all_k_coupl_xy[0]
+                
+                elif ((N_y - N_y_scatter) // 2) < atomnr < ((N_y - N_y_scatter) // 2) + N_y_scatter + 1:
+                    
+                    interaction_layer[j, j] += -sum(all_k_coupl_x)
+                    
+        
+                    if i == 0:
+
+                        if (atomnr == ((N_y - N_y_scatter) // 2) + 1 or atomnr == ((N_y - N_y_scatter) // 2) + N_y_scatter) and N_y_scatter > 1:
+                            interaction_layer[j, j] += -all_k_coupl_xy[0]
+                            interaction_layer[j + 1, j + 1] += -all_k_coupl_xy[0]
+                        elif N_y_scatter > 1:
+                            interaction_layer[j, j] += -2 * all_k_coupl_xy[0]
+                            interaction_layer[j + 1, j + 1] += -2 * all_k_coupl_xy[0]
+        
+        interaction_layers_dict[i] = interaction_layer       
+                    
+                
+    for l in range(interaction_range):
+        k_LR_C[l * interaction_layers_dict[l].shape[0]: l * interaction_layers_dict[l].shape[0] + interaction_layers_dict[l].shape[0], \
+            l * interaction_layers_dict[l].shape[0]: l * interaction_layers_dict[l].shape[0] + interaction_layers_dict[l].shape[0]] = interaction_layers_dict[interaction_range - 1 - l]
+        
+    return k_LR_C
+
+def calc_direct_interaction(N_y_scatter, k_values) -> np.ndarray:
+    """
+    Build the direct interaction matrix of the electrode surface to the central part (only NN interaction).
+
+    Args:
+        N_y_scatter (int, float): Number of atoms in y-direction for the central part.
+        k_values (dict): Dictionary with force constants (from ranged_force_constant function).
+
+    Returns:
+        direct_interaction (np.ndarray): Direct interaction matrix of the center and electrode.
+        
+    """
+
+    direct_interaction = np.zeros((2 * (N_y_scatter + 2), 2 * N_y_scatter), dtype=float)
+    all_k_coupl_x = k_values["k_coupl_x"]
+    all_k_coupl_xy = k_values["k_coupl_xy"]
+    
+    for i in range(0, direct_interaction.shape[0], 2):
+        
+        if 0 < i <= direct_interaction.shape[1]:
+            direct_interaction[i, i - 2] = -all_k_coupl_x[0]
+            
+            if i - 2 + 3 <= direct_interaction.shape[1] - 1:
+                direct_interaction[i, i - 2 + 3] = -all_k_coupl_xy[0]
+                direct_interaction[i + 1, i - 2 + 2] = -all_k_coupl_xy[0]
+            if i - 2 - 2 >= 0:
+                direct_interaction[i, i - 2 - 1] = -all_k_coupl_xy[0]
+                direct_interaction[i + 1, i - 2 - 2] = -all_k_coupl_xy[0]
+
+        # xy coupling
+        if i == 0:
+            direct_interaction[i, i + 1] = -all_k_coupl_xy[0]
+            direct_interaction[i + 1, i] = -all_k_coupl_xy[0]
+
+        elif i == direct_interaction.shape[0] - 2:
+            direct_interaction[i, direct_interaction.shape[1] - 1] = -all_k_coupl_xy[0]
+            direct_interaction[i + 1, direct_interaction.shape[1] - 2] = -all_k_coupl_xy[0]
+    
+    return direct_interaction
