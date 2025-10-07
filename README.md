@@ -153,3 +153,5 @@ which will execute the code and write the results to your given data path.
   DOI: 10.1103/PhysRevB.91.165419
 * Troels Markussen, Phonon interference effects in molecular junctions, J. Chem. Phys. 139, 244101 (2013)\
   DOI: 10.1063/1.4849178
+* N. Mingo, D. A. Stewart, D. A. Broido and D. Srivastava, "Phonon transmission through defects in carbon nanotubes from first principles", PHYSICAL REVIEW B 77, 033418 2008
+  DOI: 10.1103/PhysRevB.77.033418
