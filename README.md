@@ -17,7 +17,7 @@ In the following, the config_dat.json is shown with explanations for each parame
 ***Chain1D***: Analytical setup for a 1D chain.\
 ***Ribbon2D***: Finite 2D Ribbon with coupling in x, y and xy-direction.\
 ***AnalyticalFourier***: The (quasi-)infinite electrode is setup analytically by fourier transforming an atom in the periodic y-direction.\
-***DecimationFourier***: Whole finite unit cell (L-C-R) is extended periodically in y-direction (transverse to transport).\
+***DecimationFourier***: Whole finite unit cell (L-C-R) is extended periodically in y-direction (transverse to transport).
 
 **General calculation parameters**
 ```
