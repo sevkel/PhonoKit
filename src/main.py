@@ -1,22 +1,50 @@
-"""Phononic transport calculation including the data output."""
+"""
+Phononic Transport Calculations
 
+Main module for phonon transport calculations including data output and visualization.
+Implements the theoretical framework from:
+
+M. Bürkle, Thomas J. Hellmuth, F. Pauly, Y. Asai, First-principles calculation of the 
+thermoelectric figure of merit for [2,2]paracyclophane-based single-molecule junctions, 
+PHYSICAL REVIEW B 91, 165419 (2015)
+DOI: 10.1103/PhysRevB.91.165419
+
+Features:
+- Comprehensive phonon transport calculations
+- Multiple electrode configurations
+- Thermal conductance calculations
+- Data visualization and output
+- Support for various scattering objects
+
+Author: Severin Keller
+Date: 2025
+"""
+
+# Standard library imports
 import sys
 import json
 import os
 from unicodedata import name
+
 from joblib import Parallel, delayed
 import numpy as np
-from model_systems import * 
-import electrode as el
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 import tmoutproc as top
-import calculate_kappa as ck
-from utils import constants as const, matrix_gen as mg
-import scienceplots 
+import scienceplots
 
+# Local imports
+from model_systems import * 
+import electrode as el
+import calculate_kappa as ck
+from utils import constants as const, matrix_gen as mg 
+
+
+# ============================================================================
+# PLOTTING CONFIGURATION
+# ============================================================================
 
 # For plotting
 matplotlib.rcParams['font.family'] = r'C://Users//sevke//Desktop//Dev//fonts//fira_sans//FiraSans-Regular.ttf'
@@ -24,35 +52,44 @@ prop = fm.FontProperties(fname=r'C://Users//sevke//Desktop//Dev//fonts//fira_san
 plt.style.use(['science', 'notebook', 'no-latex'])
 
 
+# ============================================================================
+# MAIN TRANSPORT CLASS
+# ============================================================================
+
 class PhononTransport:
 	"""
-	Class for phonon transport calculations according to:
-
+	Phonon Transport Calculation Engine
+	
+	Implements phonon transport calculations based on the theoretical framework from:
 	M. Bürkle, Thomas J. Hellmuth, F. Pauly, Y. Asai, First-principles calculation of the 
-    thermoelectric figure of merit for [2,2]paracyclophane-based single-molecule junctions, 
-    PHYSICAL REVIEW B 91, 165419 (2015)
+	thermoelectric figure of merit for [2,2]paracyclophane-based single-molecule junctions, 
+	PHYSICAL REVIEW B 91, 165419 (2015)
 	DOI: 10.1103/PhysRevB.91.165419
 
-	Here, the electrodes Green's functions and the central parts can be set up in different configurations.
+	Supports multiple electrode configurations and scattering objects with:
+	- 4D indexing for frequency-momentum space calculations
+	- Parallel computation for performance optimization
+	- Comprehensive thermal conductance calculations
+	- Automatic data output and visualization
 
 	Args:
-		data_path (str): Path where the data will be saved.
-		sys_descr (str): System description for the data path.
-		electrode_dict (dict): Dictionary containing the configuration of the enabled electrode.
-		scatter_dict (dict): Dictionary containing the configuration of the enabled scatter object.
-		E_D (float): Debye energy in meV.
-		M_E (str): Atom type in the reservoir.
-		M_C (str): Atom type coupled to the reservoir.
-		N (int): Number of grid points.
-		T_min (float): Minimum temperature for thermal conductance calculation.
-		T_max (float): Maximum temperature for thermal conductance calculation.
-		kappa_grid_points (int): Number of grid points for thermal conductance.
+		data_path (str): Output directory for calculated data
+		sys_descr (str): System description identifier for data organization
+		electrode_dict (dict): Electrode configuration parameters
+		scatter_dict (dict): Scattering object configuration parameters
+		E_D (float): Debye energy in meV
+		M_E (str): Atom type in the reservoir electrodes
+		M_C (str): Atom type in the central scattering region
+		N (int): Number of frequency grid points
+		T_min (float): Minimum temperature for thermal conductance calculation
+		T_max (float): Maximum temperature for thermal conductance calculation
+		kappa_grid_points (int): Number of temperature grid points for thermal conductance
 
 	Attributes:
-		data_path (str): Path where the data will be saved.
-		sys_descr (str): System description for the data path.
-		electrode_dict (dict): Dictionary containing the configuration of the enabled electrode.
-		scatter_dict (dict): Dictionary containing the configuration of the enabled scatter object.
+		data_path (str): Output directory path
+		sys_descr (str): System description string
+		electrode_dict (dict): Electrode configuration dictionary
+		scatter_dict (dict): Scattering object configuration dictionary
 		E_D (float): Debye energy in meV.
 		M_E (str): Atom type in the reservoir.
 		M_C (str): Atom type coupled to the reservoir.
@@ -650,14 +687,18 @@ class PhononTransport:
 				filename = (f"{self.sys_descr}___PT_elL={self.electrode_dict_L['type']}_elR={self.electrode_dict_R['type']}_"
 						f"CC={self.scatter_dict['type']}_intrange={self.electrode_L.interaction_range}_"
 						f"kcoupl_x={self.electrode_dict_L['k_coupl_x']}_"
-						f"kcoupl_xy={self.electrode_dict_L['k_coupl_xy']}_trans_prob_matrix.npz")
+						f"kcoupl_xy={self.electrode_dict_L['k_coupl_xy']}_trans_prob_mats.npz")
 				
 			except KeyError as e:
 				filename = (f"{self.sys_descr}___PT_elL={self.electrode_dict_L['type']}_elR={self.electrode_dict_R['type']}_"
 						f"CC={self.scatter_dict['type']}_intrange={self.electrode_L.interaction_range}_"
-						f"kcoupl_x={self.electrode_dict_L['k_coupl_x']}_trans_prob_matrix.npz")
+						f"kcoupl_x={self.electrode_dict_L['k_coupl_x']}_trans_prob_mats.npz")
 				
-			np.savez(os.path.join(trans_prob_mat_path, filename), w=self.w, trans_prob_matrix=tau_ph_probmat)
+			np.savez(os.path.join(trans_prob_mat_path, filename), 
+					w=self.w, 
+					q_y=self.electrode_L.q_y,
+					trans_prob_matrix=tau_ph_probmat,
+					tau_ph_wq=tau_ph_wq)
 			
 			return tau_ph
 		

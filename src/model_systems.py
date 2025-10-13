@@ -1,34 +1,58 @@
 """
-Construct the dynamical matrices for a 1D chain or a 2D Ribbon.
-Multiply every force constant with (constants.eV2hartree / constants.ang2bohr ** 2) if needed
+Model Systems for Phononic Transport
 
+This module provides model systems for phonon transport calculations:
+- 1D chains with various configurations
+- 2D ribbons with different geometries
+- Dynamical matrix construction
+- Force constant management
+
+All models support configurable:
+- Coupling constants between electrodes and central region
+- Interaction potentials and ranges
+- Lattice parameters and atom types
+- Matrix generation with sparse storage
+
+Note: Force constants should be multiplied by (constants.eV2hartree / constants.ang2bohr ** 2) if needed
+
+Author: Severin Keller
+Date: 2025
 """
 
 import numpy as np
+
+# Local imports
 from utils import matrix_gen as mg
+
+
+# ============================================================================
+# MODEL SYSTEM CLASSES
+# ============================================================================
 
 class Model:
     """
-    Mother class for setting up several model systems.
+    Base Model Class for Phononic Systems
+    
+    Abstract base class for constructing various model systems used in phonon transport
+    calculations. Provides common parameters and functionality for all derived models.
 
     Args:
-        k_coupl_x_l (float): Coupling constant between left (l) electrode and central part.
-        k_c_x (float): Coupling constant within the central part.
-        k_coupl_x_r (float): Coupling constant between right (r) electrode and central part.
-        interact_potential (str): Interaction potential.
-        interaction_range (int): Interaction range (nearest neighbours etc.).
-        lattice_constant (float): Lattice constant.
-        atom_type (str): Atom type within the central part.
+        k_coupl_x_l (float): Left electrode-central region coupling constant
+        k_c_x (float): Intra-central region coupling constant
+        k_coupl_x_r (float): Right electrode-central region coupling constant
+        interact_potential (str): Interaction potential type (default: "reciproke_squared")
+        interaction_range (int): Interaction range in nearest neighbors (default: 1)
+        lattice_constant (float): Lattice constant in appropriate units (default: 3.0)
+        atom_type (str): Atom type identifier for the central region (default: "Au")
 
     Attributes:
-        k_coupl_x_l (float): Coupling constant between left (l) electrode and central part.
-        k_c_x (float): Coupling constant within the central part.
-        k_coupl_x_r (float): Coupling constant between right (r) electrode and central part.
-        interact_potential (str): Interaction potential.
-        interaction_range (int): Interaction range (nearest neighbours etc.).
-        lattice_constant (float): Lattice constant.
-        atom_type (str): Atom type within the central part.
-
+        k_coupl_x_l (float): Left coupling constant
+        k_c_x (float): Central coupling constant  
+        k_coupl_x_r (float): Right coupling constant
+        interact_potential (str): Interaction potential specification
+        interaction_range (int): Range of interactions
+        lattice_constant (float): System lattice constant
+        atom_type (str): Central region atom type
     """
     
     def __init__(self, k_coupl_x_l, k_c_x, k_coupl_x_r, interact_potential="reciproke_squared", interaction_range=1, lattice_constant=3.0, atom_type="Au"):
@@ -42,16 +66,19 @@ class Model:
 
 class Chain1D(Model):
     """
-    This class creates a 1D chain with a given number of atoms (N) and a given spring constant (k). Inherits from the Model class.
+    One-Dimensional Chain Model
+    
+    Creates a 1D atomic chain with configurable length and coupling constants.
+    Inherits coupling and interaction parameters from the base Model class.
 
     Args:
-        Model (object): Inherits arguments from Model class.
+        Model parameters: Inherited from Model base class
+        N (int): Number of atoms in the chain (chain length in x-direction)
 
-    Attributes
-        All attributes of Model motherclass.
-        N (int): Length of the chain length (Number of connected atoms in x-direction).
-        hessian (np.ndarray): Hessian matrix of the central part.
-
+    Attributes:
+        All Model attributes plus:
+        N (int): Chain length (number of connected atoms)
+        hessian (np.ndarray): Dynamical matrix of the central chain region
     """
 
     def __init__(self, k_coupl_x_l, k_c_x, k_coupl_x_r, interact_potential, interaction_range, lattice_constant, atom_type, N): 

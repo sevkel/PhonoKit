@@ -1,26 +1,39 @@
 """
-Construct electrode models for the phononic transport calculation. Choose between
+Electrode Models for Phononic Transport Calculations
 
-Debye model,
-1D chain (analyitcal),
-2D finite Ribbon,
-Fourier transformed single molecule unit cell (for single junction),
-Fourier transformed multi molecule unit cell (for periodic junction).
+This module provides electrode implementations for phonon transport calculations:
+- Debye model
+- 1D chain (analytical)  
+- 2D finite Ribbon
+- Fourier transformed single molecule unit cell (single junction)
+- Fourier transformed multi molecule unit cell (periodic junction)
 
-Multiply every force constant with (constants.eV2hartree / constants.ang2bohr ** 2) if needed
+Models support:
+- Parallel computation with joblib
+- Dense matrix operations with complex64 precision
+- Sparse matrix storage for memory efficiency
 
+Author: Severin Keller
+Date: 2025
 """
 
-
+# Standard library imports
 import sys
 import os
+
 import numpy as np
 import scipy
 from joblib import Parallel, delayed
 from scipy.integrate import simpson, quad
-from utils import constants, matrix_gen as mg
 from ase.dft.kpoints import monkhorst_pack
 
+# Local imports
+from utils import constants, matrix_gen as mg
+
+
+# ============================================================================
+# GLOBAL FUNCTIONS
+# ============================================================================
 
 def decimation(w, H_00, H_01, H_NN, eps=1E-50, q_y=None, k_values=None, N_y=None) -> np.ndarray:
     """
@@ -137,26 +150,41 @@ def decimation(w, H_00, H_01, H_NN, eps=1E-50, q_y=None, k_values=None, N_y=None
 
     return g_0
 
+
+# ============================================================================
+# ELECTRODE CLASSES
+# ============================================================================
+
 class Electrode:
     """
-    Motherclass for setting up different electrode models. By default, the left electrode is calculated.
+    Base Electrode Class for Phonon Transport
+    
+    Abstract base class for implementing different electrode models in phonon transport
+    calculations. Provides common interface and functionality for all electrode types.
+    
+    All derived electrode classes support:
+    - 4D indexing structure (N_w, N_q, matrix_dim, matrix_dim)
+    - Parallel computation capabilities
+    - Complex64 precision calculations
+    - Sparse matrix optimizations
 
     Args:
-        w (np.ndarray): Frequency/energy points to calculate.
-        interaction_range (int, float): Interaction range.
-        interaction_potential (str): Interaction potential.
-        atom_type (str): Atom type within the electrode.
-        lattice_constant (int, float): Lattice constant.
-        left, right (bool): Flag if its the left or the right electrode.
+        w (np.ndarray): Frequency points for calculation
+        interaction_range (int, float): Range of atomic interactions (default: 1)
+        interact_potential (str): Type of interaction potential (default: "reciproke_squared")
+        atom_type (str): Atom type identifier (default: "Au")
+        lattice_constant (int, float): Lattice parameter (default: 3.0)
+        left (bool): Flag for left electrode configuration (default: True)
+        right (bool): Flag for right electrode configuration (default: False)
 
     Attributes:
-        w (np.ndarray): Frequency/energy points to calculate.
-        interaction_range (int, float): Interaction range.
-        interaction_potential (str): Interaction potential.
-        atom_type (str): Atom type within the electrode.
-        lattice_constant (int, float): Lattice constant.
-        left, right (bool): Flag if its the left or the right electrode.
-
+        w (np.ndarray): Frequency calculation points
+        interaction_range (int, float): Interaction range parameter
+        interact_potential (str): Interaction potential specification
+        atom_type (str): Electrode atom type
+        lattice_constant (int, float): System lattice constant
+        left (bool): Left electrode flag
+        right (bool): Right electrode flag
     """
 
     def __init__(self, w, interaction_range=1, interact_potential="reciproke_squared", 
