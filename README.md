@@ -1,10 +1,6 @@
 # PhonoKit
 
-<<<<<<< HEAD
 ![](https://github.com/sevkel/PhonoKit/blob/055028dfd1e530f20314ce88aa4983fbab80a401/example.png)
-=======
-![Setup example](example.png)
->>>>>>> dcc09367ae4d6ddb70bc0c4f350f0243da25caf2
 
 Phononic transmission calculation for different model configurations of electrodes and the scattering region.
 Using the 
@@ -21,11 +17,7 @@ In the following, the config_dat.json is shown with explanations for each parame
 ***Chain1D***: Analytical setup for a 1D chain.\
 ***Ribbon2D***: Finite 2D Ribbon with coupling in x, y and xy-direction.\
 ***AnalyticalFourier***: The (quasi-)infinite electrode is setup analytically by fourier transforming an atom in the periodic y-direction.\
-<<<<<<< HEAD
 ***DecimationFourier***: Whole finite unit cell (L-C-R) is extended periodically in y-direction (transverse to transport).\
-=======
-***DecimationFourier***: Whole finite unit cell (L-C-R) is extended periodically in y-direction (transverse to transport).
->>>>>>> dcc09367ae4d6ddb70bc0c4f350f0243da25caf2
 
 **General calculation parameters**
 ```
@@ -161,8 +153,3 @@ which will execute the code and write the results to your given data path.
   DOI: 10.1103/PhysRevB.91.165419
 * Troels Markussen, Phonon interference effects in molecular junctions, J. Chem. Phys. 139, 244101 (2013)\
   DOI: 10.1063/1.4849178
-<<<<<<< HEAD
-=======
-* N. Mingo, D. A. Stewart, D. A. Broido and D. Srivastava, "Phonon transmission through defects in carbon nanotubes from first principles", PHYSICAL REVIEW B 77, 033418 2008
-  DOI: 10.1103/PhysRevB.77.033418
->>>>>>> dcc09367ae4d6ddb70bc0c4f350f0243da25caf2
