@@ -1,6 +1,6 @@
 # PhonoKit
 
-![](https://github.com/sevkel/PhonoKit/blob/055028dfd1e530f20314ce88aa4983fbab80a401/example.png)
+![](example.png)
 
 Phononic transmission calculation for different model configurations of electrodes and the scattering region.
 Using the 

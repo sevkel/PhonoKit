@@ -7,7 +7,6 @@ misc/
 phonokit.code-workspace
 **/__pycache__/
 *.egg-info
-README.md
 
 *.pdf
 *.dat 
