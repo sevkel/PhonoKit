@@ -1,16 +1,25 @@
-__docformat__ = "google"
+"""
+Construct electrode models for the phononic transport calculation. Choose between
+
+Debye model,
+1D chain (analyitcal),
+2D finite Ribbon,
+Fourier transformed single molecule unit cell (for single junction),
+Fourier transformed multi molecule unit cell (for periodic junction).
+
+Multiply every force constant with (constants.eV2hartree / constants.ang2bohr ** 2) if needed
+
+"""
+
 
 import sys
 import os
 import numpy as np
 import scipy
 from joblib import Parallel, delayed
-from scipy.integrate import simpson
-from itertools import product
+from scipy.integrate import simpson, quad
 from utils import constants, matrix_gen as mg
-
-
-# Multiply every force constant with (constants.eV2hartree / constants.ang2bohr ** 2) if needed
+from ase.dft.kpoints import monkhorst_pack
 
 
 def decimation(w, H_00, H_01, H_NN, eps=1E-50, q_y=None, k_values=None, N_y=None) -> np.ndarray:
@@ -308,7 +317,7 @@ class Chain1D(Electrode):
         """
 
         all_k_coupl = self.k_values["k_coupl_x"]
-        k_coupl = sum(k_c for _ in all_k_coupl)
+        k_coupl = sum(k_c for k_c in all_k_coupl)
         
         g = self.g0 / (1 + k_coupl * self.g0)
         
@@ -356,10 +365,11 @@ class AnalyticalFourier(Electrode):
         dos_real_cpld (np.ndarray): Real-part Re(DOS_cpld) of the coupled system for each frequency.
 
     """
+
     def __init__(self, w, interaction_range, interact_potential, atom_type, lattice_constant, 
-                 N_q, k_el_x, k_el_y, k_el_xy, k_coupl_x, k_coupl_xy, N_y_scatter, batch_size=100):
+                 N_q, k_el_x, k_el_y, k_el_xy, k_coupl_x, k_coupl_xy, batch_size=100):
         super().__init__(w, interaction_range, interact_potential, atom_type, lattice_constant)
-        self.q = np.linspace(-np.pi, np.pi, N_q)
+        self.q = np.linspace(-np.pi, np.pi, N_q, endpoint=False)
         self.batch_size = batch_size
         self.k_values = mg.ranged_force_constant(k_el_x=k_el_x, k_el_y=k_el_y, k_el_xy=k_el_xy, 
                                                  k_coupl_x=k_coupl_x, k_coupl_xy=k_coupl_xy, 
@@ -369,9 +379,8 @@ class AnalyticalFourier(Electrode):
         self.k_xy = k_el_xy
         self.k_coupl_x = k_coupl_x
         self.k_coupl_xy = k_coupl_xy
-        self.N_y_scatter = N_y_scatter
         self.g0 = self._calculate_g0()
-        self.g, self.center_coupling, self.dos, self.dos_real = self._calculate_g()
+        self.g, self.dos, self.dos_real, self.dos_cpld, self.dos_real_cpld = self._calculate_g()
 
     def _calculate_g0(self) -> np.ndarray:
         """
@@ -382,20 +391,20 @@ class AnalyticalFourier(Electrode):
 
         """
 
-        def calc_g0_w(w, k_el_x, k_el_y):  
-            """
-            Calculates the surface greens function g0_q in reciprocal space for a 2D infinite square lattice electrode.
+        #def calc_g0_w(w, k_el_x, k_el_y):  
+        """
+                Calculates the surface greens function g0_q in reciprocal space for a 2D infinite square lattice electrode.
 
-            Args:
-                q (float): Wave vector in reciprocal space (y-direction).
-                w (float): Frequency in reciprocal space.
-                k_y (float): Force constant in y direction.
-                k_x (float): Force constant in x direction.
-            
-            Returns:
-                g0_q (float): Surface Green's function g0_q in reciprocal space.
-
-            """
+                Args:
+                    q (float): Wave vector in reciprocal space (y-direction).
+                    w (float): Frequency in reciprocal space.
+                    k_y (float): Force constant in y direction.
+                    k_x (float): Force constant in x direction.
+                
+                Returns:
+                    g0_q (float): Surface Green's function g0_q in reciprocal space.
+            \"\"\"
+                
 
             def g0_q(q, w):
 
@@ -415,6 +424,44 @@ class AnalyticalFourier(Electrode):
             out = list()
             for w in freqs:
                 out.append(calc_g0_w(w=w, k_el_x=self.k_el_x, k_el_y=self.k_el_y))
+            return out"""
+
+
+        def calc_g0_w(w): 
+    
+            # Integrate over q
+            def g0_q_integrand(q, w_val, k_el_x_val, k_el_y_val):
+                w_comp = w_val + (1j * 1E-24) 
+                y = k_el_y_val * np.sin(q / 2)**2
+                
+                # Analytical expression
+                g0_val = 2 * (w_comp**2 - 4 * y + np.sqrt((w_comp**2 - 4 * y) * (w_comp**2 - 4 * k_el_x_val - 4 * y)))**(-1) 
+
+                return g0_val
+
+            q_min = self.q[0]#-np.pi
+            q_max = self.q[-1]#np.pi
+        
+            args = (w, self.k_el_x, self.k_el_y)
+            
+            # Complex integration neccessary for seperately real- and imaginary part!
+            integral_real, err_real = quad(lambda q, *args: np.real(g0_q_integrand(q, *args)), 
+                                        q_min, q_max, 
+                                        args=args, limit=1000)
+            
+            integral_imag, err_imag = quad(lambda q, *args: np.imag(g0_q_integrand(q, *args)), 
+                                        q_min, q_max, 
+                                        args=args, limit=1000)
+            
+            g0_integral = integral_real + 1j * integral_imag
+            g0 = (1 / (2 * np.pi)) * g0_integral
+            
+            return g0
+        
+        def batch_worker(freqs):
+            out = list()
+            for w in freqs:
+                out.append(calc_g0_w(w=w))
             return out
         
         # batch the frequencies
@@ -425,10 +472,6 @@ class AnalyticalFourier(Electrode):
         )
 
         g0 = np.array([res for batch in g0_batches for res in batch])
-    
-
-        #g0 = map(lambda w: calc_g0_w(w, self.k_el_y, self.k_el_x), self.w)
-        #g0 = np.array([item for item in g0])
 
         return g0
 
@@ -445,51 +488,17 @@ class AnalyticalFourier(Electrode):
 
         """
 
-        N_y_scatter = self.N_y_scatter
-        direct_interaction = np.zeros((2 * (N_y_scatter + 2), 2 * N_y_scatter), dtype=float)
-        all_k_coupl_x =  self.k_values["k_coupl_x"]
-        all_k_coupl_xy =  self.k_values["k_coupl_xy"]
-        g0_template = np.identity(direct_interaction.shape[0])
-
-
-        # setting up the coupling
-        for i in range(0, direct_interaction.shape[0], 2):
-            
-            if 0 < i <= direct_interaction.shape[1]:
-                direct_interaction[i, i - 2] = -all_k_coupl_x[0]
-                
-                if i - 2 + 3 <= direct_interaction.shape[1] - 1:
-                    direct_interaction[i, i - 2 + 3] = -all_k_coupl_xy[0]
-                    direct_interaction[i + 1, i - 2 + 2] = -all_k_coupl_xy[0]
-                if i - 2 - 2 >= 0:
-                    direct_interaction[i, i - 2 - 1] = -all_k_coupl_xy[0]
-                    direct_interaction[i + 1, i - 2 - 2] = -all_k_coupl_xy[0]
-
-            if i == 0:
-                direct_interaction[i, i + 1] = -all_k_coupl_xy[0]
-                direct_interaction[i + 1, i] = -all_k_coupl_xy[0]
-
-            elif i == direct_interaction.shape[0] - 2:
-                direct_interaction[i, direct_interaction.shape[1] - 1] = -all_k_coupl_xy[0]
-                direct_interaction[i + 1, direct_interaction.shape[1] - 2] = -all_k_coupl_xy[0]
-
-        center_coupling = np.zeros(g0_template.shape, dtype=float)
-        center_coupling[:direct_interaction.shape[0], :direct_interaction.shape[1]] = direct_interaction
-
-        def compute_g_analytical(x):
-            x_matrix = x * g0_template # x is a scalar from self.g0
-            identity_matrix = np.identity(g0_template.shape[0])
-            temp_matrix = identity_matrix + np.dot(center_coupling, x_matrix)
-            g = np.dot(x_matrix, np.linalg.inv(temp_matrix))
-            return g
+        all_k_coupl = self.k_values["k_coupl_x"]
+        k_coupl = sum(k_c for k_c in all_k_coupl)
         
-        g = map(compute_g_analytical, self.g0)
-        g = np.array([item for item in g])
+        g = self.g0 / (1 + k_coupl * self.g0)
         
         dos = (-1 / np.pi) * np.imag(self.g0)
         dos_real = np.real(self.g0)
+        dos_cpld = (-1 / np.pi) * np.imag(g)
+        dos_real_cpld = np.real(g)
 
-        return g, center_coupling, dos, dos_real
+        return g, dos, dos_real, dos_cpld, dos_real_cpld
     
 class Ribbon2D(Electrode):
     """
@@ -725,7 +734,8 @@ class DecimationFourier(Electrode):
                  N_y, N_y_scatter, M_E, M_C, k_el_x, k_el_y, k_el_xy, k_coupl_x, k_coupl_xy, N_q, batch_size=100): 
         
         super().__init__(w, interaction_range, interact_potential, atom_type, lattice_constant, left, right)
-        self.q_y = np.linspace(-np.pi, np.pi, N_q)
+        #self.q_y = np.linspace(-np.pi, np.pi, N_q, endpoint=False)
+        self.q_y = np.linspace(-np.pi, np.pi, endpoint=False)
         self.batch_size = batch_size
         self.N_y = N_y
         self.N_y_scatter = N_y_scatter
@@ -901,10 +911,10 @@ if __name__ == '__main__':
     print(batch_size)
     #electrode_2dribbon = Ribbon2D(w, interaction_range=1, interact_potential='reciproke_squared', atom_type="Au", lattice_constant=3.0, left=True, right=False, N_y=3, N_y_scatter=1, M_E=1, M_C=1, 
     #                               k_el_x=900, k_el_y=900, k_el_xy=10, k_coupl_x=900, k_coupl_xy=10, batch_size=batch_size)
-    #electrode_infinite = AnalyticalFourier(w, interaction_range=1, interact_potential='reciproke_squared', atom_type="Au", lattice_constant=3.0, N_q=Nq, 
-    #                                        N_y_scatter=1, k_el_x=180, k_el_y=180, k_el_xy=0, k_coupl_x=180, k_coupl_xy=0, batch_size=batch_size)
-    electrode_2dSancho = DecimationFourier(w, interaction_range=1, interact_potential='reciproke_squared', atom_type="Au", lattice_constant=3.0, left=True, right=False, N_y=3, 
-                                           N_y_scatter=1, M_E=1, M_C=1, k_el_x=900, k_el_y=900, k_el_xy=90, k_coupl_x=900, k_coupl_xy=90, N_q=Nq, batch_size=batch_size)
+    electrode_infinite = AnalyticalFourier(w, interaction_range=1, interact_potential='reciproke_squared', atom_type="Au", lattice_constant=3.0, N_q=Nq, 
+                                            N_y_scatter=1, k_el_x=180, k_el_y=180, k_el_xy=0, k_coupl_x=180, k_coupl_xy=0, batch_size=batch_size)
+    #electrode_2dSancho = DecimationFourier(w, interaction_range=1, interact_potential='reciproke_squared', atom_type="Au", lattice_constant=3.0, left=True, right=False, N_y=3, 
+                                           #N_y_scatter=1, M_E=1, M_C=1, k_el_x=900, k_el_y=900, k_el_xy=90, k_coupl_x=900, k_coupl_xy=90, N_q=Nq, batch_size=batch_size)
     t2 = time.time()
 
     print(t2-t1)

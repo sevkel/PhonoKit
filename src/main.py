@@ -1,4 +1,4 @@
-__docformat__ = "google"
+"""Phononic transport calculation including the data output."""
 
 import sys
 import json
@@ -15,7 +15,7 @@ import matplotlib.font_manager as fm
 import tmoutproc as top
 import calculate_kappa as ck
 from utils import constants as const, matrix_gen as mg
-import scienceplots #Import needed?
+import scienceplots 
 
 
 # For plotting
@@ -68,7 +68,7 @@ class PhononTransport:
 	"""
 
 	def __init__(self, data_path, sys_descr, electrode_dict_L, electrode_dict_R, scatter_dict, 
-			  E_D, M_E, M_R, M_C, N, T_min, T_max, kappa_grid_points):
+			  E_D, M_E, M_C, N, T_min, T_max, kappa_grid_points):
 		self.data_path = data_path
 		self.sys_descr = sys_descr
 		self.electrode_dict_L = electrode_dict_L
@@ -76,7 +76,6 @@ class PhononTransport:
 		self.scatter_dict = scatter_dict
 		self.M_E = M_E
 		self.M_C = M_C
-		self.M_R = M_R
 		self.N = N
 		self.E_D = E_D
 		self.batch_size = max(1, int(N / os.cpu_count()))
@@ -182,7 +181,6 @@ class PhononTransport:
 					k_el_xy=electrode_dict["k_el_xy"],
 					k_coupl_x=electrode_dict["k_coupl_x"],
 					k_coupl_xy=electrode_dict["k_coupl_xy"],
-					N_y_scatter=self.scatter.N_y,
 					batch_size=self.batch_size
 				)
 			
@@ -231,8 +229,8 @@ class PhononTransport:
 				return FiniteLattice2D(
 					N_y=scatter_dict["N_y"],
 					N_x=scatter_dict["N_x"],
-					N_y_el_L=electrode_dict_l["N_y"],
-					N_y_el_R=electrode_dict_r["N_y"],
+					N_y_el_L=scatter_dict["N_y"] + 2,#electrode_dict_l["N_y"],
+					N_y_el_R=scatter_dict["N_y"] + 2,#electrode_dict_r["N_y"],
 					k_coupl_x_l=electrode_dict_l["k_coupl_x"],
 					k_c_x=scatter_dict["k_c_x"],
 					k_coupl_x_r=electrode_dict_r["k_coupl_x"],
@@ -248,9 +246,9 @@ class PhononTransport:
     
 			case "Chain1D":
 				return Chain1D(
-					k_c=scatter_dict["k_c_x"],
-					k_coupl_l=electrode_dict_l["k_el_x"],
-					k_coupl_r=electrode_dict_r["k_el_x"],
+					k_c_x=scatter_dict["k_c_x"],
+					k_coupl_x_l=electrode_dict_l["k_el_x"],
+					k_coupl_x_r=electrode_dict_r["k_el_x"],
 					interact_potential=scatter_dict["interact_potential"],
 					interaction_range=scatter_dict["interaction_range"],
 					lattice_constant=scatter_dict["lattice_constant"],
@@ -273,8 +271,8 @@ class PhononTransport:
 
 		match (self.electrode_dict_L["type"], self.electrode_dict_R["type"]):
 
-			case ("DebyeModel", "DebyeModel"):
-				# Scalar Greens function
+			case ("DebyeModel", "DebyeModel") | ("AnalyticalFourier", "AnalyticalFourier"):
+				# Scalar Green's function
 				g_L = self.electrode_L.g
 				g_R = self.electrode_R.g
 
@@ -295,14 +293,6 @@ class PhononTransport:
 					sigma_R[i, -1, -1] = f_E[i]
      
 				return sigma_L, sigma_R
-			
-			case ("AnalyticalFourier", "AnalyticalFourier"):
-
-				g_L = self.electrode_L.g
-				g_R = self.electrode_R.g
-
-				k_LC = self.electrode_L.center_coupling # center_coupling is enough as we allow only nearest neighbours here.
-				k_RC = self.electrode_R.center_coupling
     			
 			case ("Ribbon2D", "Ribbon2D") | ("DecimationFourier", "DecimationFourier"):
 				
@@ -501,16 +491,6 @@ class PhononTransport:
 					sigma_L[w_idx, q_idx] = sigma_L_matrix
 					sigma_R[w_idx, q_idx] = sigma_R_matrix
 
-		# InfitineFourier2D case TODO: dimensionality problem due to xy coupling -> dim(D) == dim(sigmaL,R) ggf. < dim(g_L,R) 
-		elif (electrode_dict_L["type"], electrode_dict_R["type"]) == ("AnalyticalFourier", "AnalyticalFourier"):
-
-			sigma_L_temp = np.array(list(map(lambda i: np.dot(np.dot(k_LC.T, g_L[i]), k_LC), self.i)))
-			sigma_R_temp = np.array(list(map(lambda i: np.dot(np.dot(k_RC.T, g_R[i]), k_RC), self.i)))
-
-			for i in range(self.N):
-				sigma_L[i, 0: sigma_L_temp.shape[1], 0: sigma_L_temp.shape[2]] = sigma_L_temp[i]
-				sigma_R[i, sigma_R.shape[1] - sigma_R_temp.shape[1]: sigma_R.shape[1], sigma_R.shape[2] - sigma_R_temp.shape[2]: sigma_R.shape[2]] = sigma_R_temp[i]
-
 		else:
 			raise ValueError(f"Unsupported shape for g_L: {g_L.shape} or g_R: {g_R.shape}.\n Or unallowed combination of electrode types")
 
@@ -521,7 +501,7 @@ class PhononTransport:
 		Calculates retarded and advanced Green's functions for the central part with given parameters at given frequency w.
 
 		Returns:
-			g_CC_ret, g_CC_adv (np.ndarray): Greens function for the central part.
+			g_CC_ret, g_CC_adv (np.ndarray): Green's function for the central part.
 
 		"""
 
@@ -663,7 +643,7 @@ class PhononTransport:
 					tau_ph_probmat_wq[w_idx, q_idx] = probmat
 			
 			# Average over q-points for final transmission
-			tau_ph = np.mean(tau_ph_wq, axis=1)
+			tau_ph = np.mean(tau_ph_wq, axis=1)	
 			tau_ph_probmat = np.mean(tau_ph_probmat_wq, axis=1)
 
 			try:
@@ -772,36 +752,36 @@ class PhononTransport:
 			try:
 				top.write_plot_data(path_trans + 
 						f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_"
-						f"CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kcoupl_x={electrode_dict_L["k_coupl_x"]}_"
+						f"CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kcoupl_x={self.electrode_dict_L["k_coupl_x"]}_"
 						f"kcoupl_xy={self.electrode_dict_L["k_coupl_xy"]}.dat", 
 						(self.w, self.T), "w (sqrt(har/(bohr**2*u))), T_vals")
 							
 				top.write_plot_data(path_transdos + 
 						f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_"
-						f"CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kcoupl_x={electrode_dict_L["k_coupl_x"]}_"
+						f"CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kcoupl_x={self.electrode_dict_L["k_coupl_x"]}_"
 						f"kcoupl_xy={self.electrode_dict_L["k_coupl_xy"]}.dat", 
 						(self.w, self.T), "w (sqrt(har/(bohr**2*u))), T_vals")
 				
 				top.write_plot_data(path_kappa + 
 						f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_"
-						f"CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kcoupl_x={electrode_dict_L["k_coupl_x"]}_"
+						f"CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kcoupl_x={self.electrode_dict_L["k_coupl_x"]}_"
 						f"kcoupl_xy={self.electrode_dict_L["k_coupl_xy"]}_KAPPA.dat", 
 						(self.temperature, self.kappa), "T (K), kappa (pW/K)")
 
 			except KeyError as e:
 				top.write_plot_data(path_trans + 
 						f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_"
-						f"CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kcoupl_x={electrode_dict_L["k_coupl_x"]}.dat", 
+						f"CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kcoupl_x={self.electrode_dict_L["k_coupl_x"]}.dat", 
 						(self.w, self.T), "w (sqrt(har/(bohr**2*u))), T_vals")
 				
 				top.write_plot_data(path_transdos + 
 						f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_"
-						f"CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kcoupl_x={electrode_dict_L["k_coupl_x"]}.dat", 
+						f"CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kcoupl_x={self.electrode_dict_L["k_coupl_x"]}.dat", 
 						(self.w, self.T), "w (sqrt(har/(bohr**2*u))), T_vals")
 				
 				top.write_plot_data(path_kappa + 
 						f"/{self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_"
-						f"CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kcoupl_x={electrode_dict_L["k_coupl_x"]}_KAPPA.dat", 
+						f"CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kcoupl_x={self.electrode_dict_L["k_coupl_x"]}_KAPPA.dat", 
 						(self.temperature, self.kappa), "T (K), kappa (pW/K)")
 
 
@@ -989,7 +969,6 @@ if __name__ == '__main__':
     sys_descr = config["CALCULATION"]["sys_descr"]
     E_D = config["CALCULATION"]["E_D"]
     M_E = config["CALCULATION"]["M_E"]
-    M_R = config["CALCULATION"]["M_R"]
     M_C = config["CALCULATION"]["M_C"]
     N = config["CALCULATION"]["N"]
     T_min = config["CALCULATION"]["T_min"]
@@ -1005,7 +984,6 @@ if __name__ == '__main__':
         scatter_dict = scatter_dict,
         E_D = E_D,
         M_E = M_E,
-		M_R = M_R,
         M_C = M_C,
         N = N,
         T_min = T_min,

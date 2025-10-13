@@ -1,6 +1,7 @@
-__docformat__ = "google"
+"""Provide generic marices to set up the electrodes and scattering regions for the phononic transport calculation."""
 
 import numpy as np
+
 
 def ranged_force_constant(
     k_el_x=0, k_c_x=0,

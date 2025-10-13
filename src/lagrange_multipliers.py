@@ -1,9 +1,18 @@
-import numpy as np
+"""
+Implementation of the Lagrange multiplier method to adjust the dynamical matrix in order to obey 
+the acoustic sum rule.
 
+"""
+
+import numpy as np
 
 def lagrangian1(K, dimension=3):
     '''
-    Same but with np.einsum
+    Lagrange-multiplier formalism to adjust force-constant matrix K in a way to fulfill the acoustic sum rule ASR. 
+    The method is implemented according to:
+    N. Mingo, D. A. Stewart, D. A. Broido and D. Srivastava, "Phonon transmission through defects in carbon nanotubes from first principles", 
+    PHYSICAL REVIEW B 77, 033418 2008
+    DOI: 10.1103/PhysRevB.77.033418
     '''
     def extract_displacement_modes(K, dim=dimension):
 
@@ -28,18 +37,14 @@ def lagrangian1(K, dimension=3):
 
         n_constraints, n_rows = R.shape
         
-        # Initialisiere B mit der richtigen Form
+        # Initialize B in the right form
         B = np.zeros((n_constraints, n_constraints, n_rows, n_rows))
-        
-        # Berechne term1 effizient mit np.einsum
         term1 = 0.25 * np.einsum('ik,mk,nk->mni', K**2, R, R)
-        
-        # Berechne term2 effizient mit np.einsum
         term2 = 0.25 * np.einsum('ij,mi,nj->mnij', K**2, R, R)
         
-        # Setze die Werte in B
-        B += np.einsum('mni,ij->mnij', term1, np.eye(n_rows))  # Diagonalbeitrag von term1
-        B += term2  # term2 direkt hinzufügen
+        # Construct B
+        B += np.einsum('mni,ij->mnij', term1, np.eye(n_rows))  
+        B += term2  
 
         return B
     
@@ -47,23 +52,21 @@ def lagrangian1(K, dimension=3):
 
         n_constraints, n = R.shape
         
-        # Berechne a effizient mit np.einsum
         a = -np.einsum('ij,mj->mi', K, R)
 
         return a
     
     def solve_lagrange_multipliers(B, a):
         
-        n_constraints, n_rows = a.shape  # (6,36)
+        n_constraints, n_rows = a.shape  
         
-        # Reshape B zu einer (n_constraints * n_rows) x (n_constraints * n_rows) Matrix
+        # Reshape B to (n_constraints * n_rows) x (n_constraints * n_rows) matrix
         B_full = B.transpose(0, 2, 1, 3).reshape(n_constraints * n_rows, n_constraints * n_rows)
         
-        # Reshape a zu einem Vektor der Länge (n_constraints * n_rows)
+        # Reshape a to a vector of shape (n_constraints * n_rows)
         a_full = a.reshape(n_constraints * n_rows)
         
         try:
-            # Lösen des Gleichungssystems
             lambda_full = np.linalg.solve(B_full, a_full)
         except np.linalg.LinAlgError as e:
             print("Singular matrix: {}".format(e))
@@ -71,7 +74,7 @@ def lagrangian1(K, dimension=3):
             lambda_full = np.linalg.solve(B_full + 1e-8 * np.eye(B_full.shape[0]), a_full)
             #lambda_full = np.linalg.pinv(B_full) @ a_full  # Verwende Pseudoinverse als Fallback
         
-        # Zurück in (n_constraints, n_rows) Form bringen
+        # Back to (n_constraints, n_rows) form
         lambda_reshaped = lambda_full.reshape(n_constraints, n_rows)
 
         return lambda_reshaped
@@ -195,14 +198,7 @@ if __name__ == "__main__":
 
 
 
-
-
-
-
-
-
-
-    # Plotten für Visualisierung
+    # Plot
     import matplotlib.pyplot as plt
     
     def plot_matrix_comparison():

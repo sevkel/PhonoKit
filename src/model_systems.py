@@ -1,9 +1,11 @@
-__docformat__ = "google"
+"""
+Construct the dynamical matrices for a 1D chain or a 2D Ribbon.
+Multiply every force constant with (constants.eV2hartree / constants.ang2bohr ** 2) if needed
+
+"""
 
 import numpy as np
 from utils import matrix_gen as mg
-
-# Multiply every force constant with (constants.eV2hartree / constants.ang2bohr ** 2) if needed
 
 class Model:
     """
