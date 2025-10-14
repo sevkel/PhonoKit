@@ -1,6 +1,6 @@
 # PhonoKit
 
-![](example.png)
+![](docs/example.png)
 
 Phononic transmission calculation for different model configurations of electrodes and the scattering region.
 Using the 
@@ -145,6 +145,21 @@ After setting the calculation up, you can run it via
 
 which will execute the code and write the results to your given data path.
 
+## Output
+
+* Density of states (DOS)
+* Thermal conductivity (Kappa)
+* Transmission spectrum
+* Transmission probability matrices -> for eigenchannel analysis
+* Transmission + DOS for plotting convenience
+
+## Example
+
+* Run the example .json with the above command and receive the output. Take care to adjust atleast the path in your .json file.
+
+### Installation
+
+Just fork the repository as this is a stand-alone project.
 
 ### References 
 * "Highly efficient schemes for the calculation of bulk and surface Green functions", M P Lopez Sancho etal 1985 J.Phys.F:Met.Phys. 15 851\
