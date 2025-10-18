@@ -265,8 +265,8 @@ class PhononTransport:
 				return FiniteLattice2D(
 					N_y=scatter_dict["N_y"],
 					N_x=scatter_dict["N_x"],
-					N_y_el_L=scatter_dict["N_y"] + 2,#electrode_dict_l["N_y"],
-					N_y_el_R=scatter_dict["N_y"] + 2,#electrode_dict_r["N_y"],
+					N_y_el_L=electrode_dict_l["N_y"],
+					N_y_el_R=electrode_dict_r["N_y"],
 					k_coupl_x_l=electrode_dict_l["k_coupl_x"],
 					k_c_x=scatter_dict["k_c_x"],
 					k_coupl_x_r=electrode_dict_r["k_coupl_x"],
@@ -281,16 +281,31 @@ class PhononTransport:
 				)
     
 			case "Chain1D":
-				return Chain1D(
-					k_c_x=scatter_dict["k_c_x"],
-					k_coupl_x_l=electrode_dict_l["k_el_x"],
-					k_coupl_x_r=electrode_dict_r["k_el_x"],
-					interact_potential=scatter_dict["interact_potential"],
-					interaction_range=scatter_dict["interaction_range"],
-					lattice_constant=scatter_dict["lattice_constant"],
-					atom_type=scatter_dict["atom_type"],
-					N=scatter_dict["N"]
-				)
+
+				if not (electrode_dict_l['type'] == 'DebyeModel' and electrode_dict_r['type'] == 'DebyeModel'):
+
+					return Chain1D(
+						k_c_x=scatter_dict["k_c_x"],
+						k_coupl_x_l=electrode_dict_l["k_el_x"],
+						k_coupl_x_r=electrode_dict_r["k_el_x"],
+						interact_potential=scatter_dict["interact_potential"],
+						interaction_range=scatter_dict["interaction_range"],
+						lattice_constant=scatter_dict["lattice_constant"],
+						atom_type=scatter_dict["atom_type"],
+						N=scatter_dict["N"]
+					)
+				
+				else:
+					return Chain1D(
+						k_c_x=scatter_dict["k_c_x"],
+						k_coupl_x_l=electrode_dict_l["k_coupl_x"],
+						k_coupl_x_r=electrode_dict_r["k_coupl_x"],
+						interact_potential=scatter_dict["interact_potential"],
+						interaction_range=scatter_dict["interaction_range"],
+						lattice_constant=scatter_dict["lattice_constant"],
+						atom_type=scatter_dict["atom_type"],
+						N=scatter_dict["N"]
+					)
 			
 			case _:
 				raise ValueError(f"Unsupported scatter type: {scatter_dict['type']}")
@@ -317,7 +332,7 @@ class PhononTransport:
 												
 			case ("Chain1D", "Chain1D"):
 
-				k_coupl_x = sum(mg.ranged_force_constant(k_el_x=self.electrode_dict_L["k_coupl_x"])["k_coupl_x"])
+				k_coupl_x = sum(mg.ranged_force_constant(k_coupl_x=self.electrode_dict_L["k_coupl_x"])["k_coupl_x"])
 				f_E = 0.5 * (self.w**2 - 2 * k_coupl_x - self.w * np.sqrt(self.w**2 - 4 * k_coupl_x, dtype=np.complex64)) 
 
 				sigma_L = np.zeros((self.N, self.scatter.N, self.scatter.N), dtype=np.complex64)
@@ -607,8 +622,8 @@ class PhononTransport:
 
 		if self.electrode_dict_L["type"] == "Chain1D" and self.electrode_dict_R["type"] == "Chain1D" and scatter_dict["type"] == "Chain1D":
 			# 1D Chain transmission has an analytical expression
-			k_coupl_x_L = sum(mg.ranged_force_constant(k_el_x=self.electrode_dict_L["k_coupl_x"])["k_coupl_x"])
-			k_coupl_x_R = sum(mg.ranged_force_constant(k_el_x=self.electrode_dict_R["k_coupl_x"])["k_coupl_x"])
+			k_coupl_x_L = sum(mg.ranged_force_constant(k_coupl_x=self.electrode_dict_L["k_coupl_x"])["k_coupl_x"])
+			k_coupl_x_R = sum(mg.ranged_force_constant(k_coupl_x=self.electrode_dict_R["k_coupl_x"])["k_coupl_x"])
 		
 			g_E_L = np.where(4 * k_coupl_x_L - self.w**2 >= 0, self.w * np.sqrt(4 * k_coupl_x_L - self.w**2), 0)
 			g_E_R = np.where(4 * k_coupl_x_R - self.w**2 >= 0, self.w * np.sqrt(4 * k_coupl_x_R - self.w**2), 0)
@@ -835,7 +850,7 @@ class PhononTransport:
 			ax1.plot(self.w, self.T)
 			ax1.set_xlabel(r'Phonon Energy ($\mathrm{meV}$)', fontsize=12, fontproperties=prop)
 			ax1.set_ylabel(r'$\tau_{\mathrm{ph}}$', fontsize=12, fontproperties=prop)
-			ax1.set_xlim(0, 0.6 * E_D)
+			ax1.set_xlim(0, 1 * E_D)
 			ax1.set_xticklabels(ax1.get_xticks(), fontproperties=prop)
 			ax1.set_yticklabels(ax1.get_yticks(), fontproperties=prop)
 			ax1.grid()

@@ -324,7 +324,7 @@ class Chain1D(Electrode):
         """
         
         all_k_el_x = self.k_values["k_el_x"]
-        k_x = sum(k_x for _ in all_k_el_x)
+        k_x = sum(k_x for k_x in all_k_el_x)
 
         #Jan PhD Thesis p.29
         g0 = 1 / (2 * k_x * self.w) * (self.w - np.sqrt(self.w**2 - 4 * k_x, dtype=np.complex64)) 
