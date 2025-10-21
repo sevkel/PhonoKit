@@ -419,42 +419,6 @@ class AnalyticalFourier(Electrode):
 
         """
 
-        #def calc_g0_w(w, k_el_x, k_el_y):  
-        """
-                Calculates the surface greens function g0_q in reciprocal space for a 2D infinite square lattice electrode.
-
-                Args:
-                    q (float): Wave vector in reciprocal space (y-direction).
-                    w (float): Frequency in reciprocal space.
-                    k_y (float): Force constant in y direction.
-                    k_x (float): Force constant in x direction.
-                
-                Returns:
-                    g0_q (float): Surface Green's function g0_q in reciprocal space.
-            \"\"\"
-                
-
-            def g0_q(q, w):
-
-                w = w + (1j * 1E-24)
-
-                y = k_el_y * np.sin(q / 2)**2
-                g0_q = 2 * (w**2 - 4 * y + np.sqrt((w**2 - 4 * y) * (w**2 - 4 * k_el_x - 4 * y)))**(-1) 
-
-                return g0_q
-            
-            g0_q_vals = np.array([g0_q(q_val, w) for q_val in self.q])
-            g0 = (1 / (2 * np.pi)) * simpson(g0_q_vals, self.q)
-
-            return g0
-        
-        def batch_worker(freqs):
-            out = list()
-            for w in freqs:
-                out.append(calc_g0_w(w=w, k_el_x=self.k_el_x, k_el_y=self.k_el_y))
-            return out"""
-
-
         def calc_g0_w(w): 
     
             # Integrate over q
