@@ -726,8 +726,11 @@ class DecimationFourier(Electrode):
                  N_y, N_y_scatter, M_E, M_C, k_el_x, k_el_y, k_el_xy, k_coupl_x, k_coupl_xy, N_q, batch_size=100): 
         
         super().__init__(w, interaction_range, interact_potential, atom_type, lattice_constant, left, right)
-        #self.q_y = np.linspace(-np.pi, np.pi, N_q, endpoint=False)
-        self.q_y = np.linspace(-np.pi, np.pi, endpoint=False)
+        self.q_y = np.linspace(-np.pi, np.pi, N_q, endpoint=False)
+
+        #self.q_y = 2 * np.pi / 1 * np.fft.fftfreq(N_q, d=1)
+        #self.q_y.sort()
+
         self.batch_size = batch_size
         self.N_y = N_y
         self.N_y_scatter = N_y_scatter

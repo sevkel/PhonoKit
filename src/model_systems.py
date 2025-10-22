@@ -171,9 +171,9 @@ class FiniteLattice2D(Model):
         self.N_y_el_L = N_y_el_L
         self.N_y_el_R = N_y_el_R
         self.atom_type = atom_type
-        self.k_values_l = mg.ranged_force_constant(k_coupl_x=k_coupl_x_l, k_coupl_xy=k_coupl_xy_l)
-        self.k_values_c = mg.ranged_force_constant(k_c_x=k_c_x, k_c_y=k_c_y, k_c_xy=k_c_xy)
-        self.k_values_r = mg.ranged_force_constant(k_coupl_x=k_coupl_x_r, k_coupl_xy=k_coupl_xy_r)
+        self.k_values_l = mg.ranged_force_constant(k_coupl_x=k_coupl_x_l, k_coupl_xy=k_coupl_xy_l, interaction_range=interaction_range)
+        self.k_values_c = mg.ranged_force_constant(k_c_x=k_c_x, k_c_y=k_c_y, k_c_xy=k_c_xy, interaction_range=interaction_range)
+        self.k_values_r = mg.ranged_force_constant(k_coupl_x=k_coupl_x_r, k_coupl_xy=k_coupl_xy_r, interaction_range=interaction_range)
         self.hessian = self._build_hessian()
 
     def _build_hessian(self) -> np.ndarray:
