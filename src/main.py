@@ -573,5 +573,6 @@ if __name__ == '__main__':
     
     PT.plot_transport(plot_data=config["data_output"]["plot_transmission"])
     PT.plot_dos(plot_dos=config["data_output"]["plot_dos"])
-        
+    PT.write_coupled_surface_greens_functions()
+	
     print("debug")

@@ -250,7 +250,4 @@ class PlotService:
                 w=w, 
                 g_cpld_R=electrode_R.g,
                 electrode_type=self.electrode_dict_R['type'])
-        
-        print(f"Coupled surface Green's functions saved to: {cpld_sfg_path}")
-        print(f"  - Left electrode: {base_filename}_cpld_g_L.npz")
-        print(f"  - Right electrode: {base_filename}_cpld_g_R.npz")
+
