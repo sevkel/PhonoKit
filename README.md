@@ -30,7 +30,7 @@ In the following, the config_dat.json is shown with explanations for each parame
 
         "M_E": Element shortcut within the left (L) and right (R) electrode (e.g. Au) -> str,
         "M_C": Element shortcut within the central scattering-region (C) (e.g. Au) -> str,
-        "E_D": Debye energy -> float,
+        "E": Energy spectrum -> list[startpoint, endpoint] (e.g. [15, 25]),
         "N": Number of grid-points -> int,
         "T_min": Minimal temperature -> float,
         "T_max": Maximal temperature -> float,
@@ -46,6 +46,7 @@ In the following, the config_dat.json is shown with explanations for each parame
 
         "DebeyeModel": {
             "enabled": decide which model you want to activate -> bool (lower letter in .json, e.g. true),
+            "E_D": Debye energy -> float,
             "k_coupl_x": coupling constant to the center in x-direction -> float,
             "k_coupl_xy": 0
         },
