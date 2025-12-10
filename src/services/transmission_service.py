@@ -158,7 +158,7 @@ class TransmissionCalculator:
                 tau_ph_wq[w_idx, q_idx] = tau_val
                 tau_ph_probmat_wq[w_idx, q_idx] = probmat
         
-        # Average over q-points
+    
         tau_ph = np.mean(tau_ph_wq, axis=1)
         tau_ph_probmat = np.mean(tau_ph_probmat_wq, axis=1)
         

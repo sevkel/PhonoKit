@@ -1,7 +1,8 @@
 """
     File name: calculate_kappa.py
-    Author: Matthias Blaschke
-    Python Version: 3.9
+    Author: Severin Keller, Matthias Blaschke
+    Python Version: 3.9\
+    Date: 2025
 """
 import codecs
 import configparser

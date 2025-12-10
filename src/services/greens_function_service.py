@@ -64,7 +64,7 @@ class GreensFunctionCalculator:
     def _calculate_standard(self) -> tuple[np.ndarray, np.ndarray]:
         """Calculate Green's functions for standard electrode types (3D arrays)."""
         g_CC_ret = np.array([
-            np.linalg.inv((self.w[i] + 1E-10j)**2 * np.identity(self.D.shape[0]) - 
+            np.linalg.inv((self.w[i] + 1E-8j)**2 * np.identity(self.D.shape[0]) - 
                          self.D - self.sigma_L[i] - self.sigma_R[i])
             for i in self.i
         ])
@@ -87,7 +87,7 @@ class GreensFunctionCalculator:
             results_adv = []
             
             for w_idx, q_idx, w_val in w_q_data:
-                matrix_to_invert = ((w_val + 1E-10j)**2 * np.identity(self.D.shape[0]) - 
+                matrix_to_invert = ((w_val + 1E-8j)**2 * np.identity(self.D.shape[0]) - 
                                    self.D - self.sigma_L[w_idx, q_idx] - 
                                    self.sigma_R[w_idx, q_idx])
                 

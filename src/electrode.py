@@ -35,7 +35,115 @@ from utils import constants, matrix_gen as mg
 # GLOBAL FUNCTIONS
 # ============================================================================
 
-def decimation(w, H_00, H_01, H_NN, eps=1E-50, q_y=None, k_values=None, N_y=None) -> np.ndarray:
+def fourier_transform(H_01, H_NN, H_00=None, k_values=None, q_y=None, N_y=None):
+    """
+    Fourier transforms the given matrices for a periodic system description
+
+    """
+
+    if H_00 is not None:
+        H_00 = H_00.astype(np.complex64)
+
+    H_01 = H_01.astype(np.complex64)
+    H_NN = H_NN.astype(np.complex64)
+    
+    if all((q_y is not None, k_values is not None, N_y is not None)):
+
+        all_k_el_y = k_values["k_el_y"]
+        all_k_el_xy = k_values["k_el_xy"]
+
+        for i in range(H_00.shape[0]):
+            
+            if i % 2 == 0:
+                atomnr_i = np.ceil(float(i + 1) / 2)
+            
+                if (atomnr_i == 1 or atomnr_i == N_y) and i < H_00.shape[0] - 1:
+    
+                    if atomnr_i == 1:
+                        if H_00 is not None:
+                            H_00[i, i] += all_k_el_xy[0]
+                            H_00[i + 1, i + 1] += all_k_el_y[0] + all_k_el_xy[0]
+                        H_NN[i, i] += 2 * all_k_el_xy[0]
+                        H_NN[i + 1, i + 1] += all_k_el_y[0] + 2 * all_k_el_xy[0]
+
+                    else:
+                        if H_00 is not None:
+                            H_00[i, i] += all_k_el_xy[0]
+                            H_00[i + 1, i + 1] += all_k_el_y[0] + all_k_el_xy[0]
+                        H_NN[i, i] += 2 * all_k_el_xy[0]
+                        H_NN[i + 1, i + 1] += all_k_el_y[0] + 2 * all_k_el_xy[0]
+
+            for j in range(H_00.shape[1]):
+
+                if j % 2 == 0:
+                    atomnr_j = np.ceil(float(j + 1) / 2)
+
+                    if (atomnr_i == 1 and i == 0) and atomnr_j == N_y and j < H_00.shape[0] - 1:  
+                        if H_00 is not None:       
+                            H_00[i + 1, j + 1] += -all_k_el_y[0] * np.exp(1j * q_y)         
+                            H_00[j + 1, i + 1] += -all_k_el_y[0] * np.exp(-1j * q_y)
+                        H_NN[i + 1, j + 1] += -all_k_el_y[0] * np.exp(1j * q_y)         
+                        H_NN[j + 1, i + 1] += -all_k_el_y[0] * np.exp(-1j * q_y)
+                        H_01[i + 1, j + 1] += -all_k_el_xy[0] * np.exp(1j * q_y)     
+                        H_01[i, j] += -all_k_el_xy[0] * np.exp(1j * q_y)  
+                        H_01[j + 1, i + 1] += -all_k_el_xy[0] * np.exp(-1j * q_y)
+                        H_01[j, i] += -all_k_el_xy[0] * np.exp(-1j * q_y)
+
+                        break
+        
+        return H_01, H_NN, H_00 
+
+def calculate_bandstructure(H_NN, H_01, N_kx=201, kx_points=None):
+    """
+    Compute bandstructure omega(k) for the ribbon (periodic direction).
+    Returns (k_points, freqs) where freqs.shape == (len(k_points), matrix_dim).
+
+    Args:
+        H_NN (np.ndarray): Principal bulk layer
+        H_01 (np.ndrarry): Interaction layer
+        N_kx (int): Number of kx points, which will be equally 
+                    distributed from [-pi, pi] if no grid is given
+        kx_points(np.ndarray): kx grid points
+
+    Returns:
+        kx_points (np.ndarray): kx grid points
+        freqs (np.ndarray): Corresponding frequencies -> Band structure
+    """
+    
+    if kx_points is None:
+        kx_points = np.linspace(-np.pi, np.pi, N_kx, endpoint=True)
+
+    matrix_dim = H_NN.shape[0]
+    freqs = np.zeros((len(kx_points), matrix_dim), dtype=float)
+
+    for ik, k in enumerate(kx_points):
+        Hk = H_NN + H_01 * np.exp(1j * k) + H_01.T * np.exp(-1j * k)
+        #Hk = 0.5 * (Hk + Hk.T.conj())  # numeric hermiticity
+        vals = np.linalg.eigvals(Hk)
+
+        #TODO: Assert max(imag) < thresh, eigh probieren
+
+        vals_real = np.real(vals)
+        vals_real[vals_real < 0] = 0.0
+        omegas = np.sqrt(vals_real)
+        freqs[ik, :] = np.sort(omegas)
+
+    if False:
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(6, 6))
+        for band in range(freqs.shape[1]):
+            plt.plot(kx_points, freqs[:, band], color='black', lw=0.8)
+        plt.xlabel('k')
+        plt.ylabel('omega')
+        plt.title('Ribbon2D bandstructure')
+        plt.grid(True)
+        
+        plt.savefig(r"C://Users//sevke//Desktop//Dev//MA//phonokit//plot//quick_test_res//band_test313_nonperiodic.pdf", bbox_inches='tight')
+        
+
+    return kx_points, freqs
+
+def decimation(w, H_00, H_01, H_NN, eps=1E-50) -> np.ndarray:
     """
     Decimation algorithm to calculate the surface greens function of a semi-infinite lattice.
     Based on: "Highly efficient schemes for the calculation of bulk and surface Green functions", 
@@ -54,53 +162,8 @@ def decimation(w, H_00, H_01, H_NN, eps=1E-50, q_y=None, k_values=None, N_y=None
 
     """
 
-    if all((q_y is not None, k_values is not None, N_y is not None)):
-
-        H_NN = H_NN.astype(np.complex64)
-        H_00 = H_00.astype(np.complex64)
-        H_01 = H_01.astype(np.complex64)
-
-        all_k_el_y = k_values["k_el_y"]
-        all_k_el_xy = k_values["k_el_xy"]
-
-        for i in range(H_00.shape[0]):
-            
-            if i % 2 == 0:
-                atomnr_i = np.ceil(float(i + 1) / 2)
-            
-                if (atomnr_i == 1 or atomnr_i == N_y) and i < H_00.shape[0] - 1:
-    
-                    if atomnr_i == 1:
-                        H_00[i, i] += all_k_el_xy[0]
-                        H_00[i + 1, i + 1] += all_k_el_y[0] + all_k_el_xy[0]
-                        H_NN[i, i] += 2 * all_k_el_xy[0]
-                        H_NN[i + 1, i + 1] += all_k_el_y[0] + 2 * all_k_el_xy[0]
-
-                    else:
-                        H_00[i, i] += all_k_el_xy[0]
-                        H_00[i + 1, i + 1] += all_k_el_y[0] + all_k_el_xy[0]
-                        H_NN[i, i] += 2 * all_k_el_xy[0]
-                        H_NN[i + 1, i + 1] += all_k_el_y[0] + 2 * all_k_el_xy[0]
-
-            for j in range(H_00.shape[1]):
-
-                if j % 2 == 0:
-                    atomnr_j = np.ceil(float(j + 1) / 2)
-
-                    if (atomnr_i == 1 and i == 0) and atomnr_j == N_y and j < H_00.shape[0] - 1:         
-                        H_00[i + 1, j + 1] += -all_k_el_y[0] * np.exp(1j * q_y)         
-                        H_00[j + 1, i + 1] += -all_k_el_y[0] * np.exp(-1j * q_y)
-                        H_NN[i + 1, j + 1] += -all_k_el_y[0] * np.exp(1j * q_y)         
-                        H_NN[j + 1, i + 1] += -all_k_el_y[0] * np.exp(-1j * q_y)
-                        H_01[i + 1, j + 1] += -all_k_el_xy[0] * np.exp(1j * q_y)     
-                        H_01[i, j] += -all_k_el_xy[0] * np.exp(1j * q_y)  
-                        H_01[j + 1, i + 1] += -all_k_el_xy[0] * np.exp(-1j * q_y)
-                        H_01[j, i] += -all_k_el_xy[0] * np.exp(-1j * q_y)
-
-                        break
-
     w_temp = w                    
-    w = np.identity(H_NN.shape[0]) * (w + (1.j * 1E-7))**2  # add small imaginary part to avoid singularities
+    w = np.identity(H_NN.shape[0]) * (w + (1.j * 1E-5))**2  # add small imaginary part to avoid singularities
     H_01_dagger = np.transpose(np.conj(H_01))
     g = np.linalg.inv(w - H_NN) 
     alpha_i = np.dot(np.dot(H_01, g), H_01)
@@ -125,7 +188,7 @@ def decimation(w, H_00, H_01, H_NN, eps=1E-50, q_y=None, k_values=None, N_y=None
         except np.linalg.LinAlgError:
             print(f"Matrix regularization was applied during the decimation algorithm for w = {w_temp}.")
             g = np.nan_to_num((w - epsilon_i), nan=0.0, posinf=0.0, neginf=0.0)
-            g = np.linalg.inv(g + 1e-8 * np.eye(g.shape[0]))
+            g = np.linalg.inv(g + 1E-5 * np.eye(g.shape[0]))
             
         epsilon_i = epsilon_i + np.dot(np.dot(alpha_i, g), beta_i) + np.dot(np.dot(beta_i, g), alpha_i)
         epsilon_is = epsilon_is + np.dot(np.dot(alpha_i, g), beta_i)
@@ -149,7 +212,6 @@ def decimation(w, H_00, H_01, H_NN, eps=1E-50, q_y=None, k_values=None, N_y=None
         sys.exit()
 
     return g_0
-
 
 # ============================================================================
 # ELECTRODE CLASSES
@@ -423,7 +485,7 @@ class AnalyticalFourier(Electrode):
     
             # Integrate over q
             def g0_q_integrand(q, w_val, k_el_x_val, k_el_y_val):
-                w_comp = w_val + (1j * 1E-24) 
+                w_comp = w_val + (1j * 1E-5) 
                 y = k_el_y_val * np.sin(q / 2)**2
                 
                 # Analytical expression
@@ -534,15 +596,17 @@ class Ribbon2D(Electrode):
         dos_real (np.ndarray): Real-part Re(DOS) for each frequency.
         dos_cpld (np.ndarray): DOS of the coupled system for each frequency.
         dos_real_cpld (np.ndarray): Real-part Re(DOS_cpld) of the coupled system for each frequency.
-        batch_size (int): batch-size for task parallelism.
+        batch_size (int): Batch-size for task parallelism.
         M_E, M_C (float): Mass of the electrode (E) and center (C) atoms. (Not needed for now)
         H_01 (np.ndarray): H_01 == k_LR_C if the electrode has the same width in y-direction as the center.
+        k_x (np.ndarray): kx grid for the band structure
+        freqs (np.ndarray): Frequencies for the band structure
 
     """
 
     def __init__(self, w, interaction_range, interact_potential, atom_type, lattice_constant, left, right,
                  N_y, N_y_scatter, M_E, M_C, k_el_x, k_el_y, k_el_xy, k_coupl_x, k_coupl_xy, 
-                 batch_size=100): 
+                 batch_size=100, calculate_bandstructure=False): 
         super().__init__(w, interaction_range, interact_potential, atom_type, lattice_constant, left, right)
         self.N_y = N_y
         self.N_y_scatter = N_y_scatter
@@ -553,7 +617,8 @@ class Ribbon2D(Electrode):
         self.M_C = M_C
         self.eps = 1E-50
         self.batch_size = batch_size
-        self.g0, self.H_01 = self._calculate_g0()  # H_01 only needed if N_y == N_y_scatter
+        self.calculate_bandstructure = calculate_bandstructure
+        self.g0, self.H_01, self.k_x, self.freqs = self._calculate_g0()  # H_01 only needed if N_y == N_y_scatter
         self.g, self.center_coupling, self.direct_interaction, \
         self.dos, self.dos_real, self.dos_cpld, self.dos_real_cpld = self._calculate_g()
 
@@ -578,6 +643,11 @@ class Ribbon2D(Electrode):
         H_NN = mg.build_H_NN(self.N_y, self.interaction_range, k_values=self.k_values)
         H_00 = mg.build_H_00(self.N_y, self.interaction_range, k_values=self.k_values)
         H_01 = mg.build_H_01(self.N_y, self.interaction_range, k_values=self.k_values)
+
+        if self.calculate_bandstructure:
+            k_x_pts, freqs = calculate_bandstructure(H_NN=H_NN, H_01=H_01)
+        else:
+            k_x_pts, freqs = None, None
 
         assert (0 <= np.abs(np.sum(H_00 + H_01)) < 1E-10), (
             "Sum rule violated! H_00 + H_01 is not zero! Check the force constants and the interaction range."
@@ -615,7 +685,7 @@ class Ribbon2D(Electrode):
             for w_idx, matrix in batch:
                 g0[w_idx] = matrix
 
-        return g0, H_01
+        return g0, H_01, k_x_pts, freqs
 
     def _calculate_g(self) -> tuple[np.ndarray]: 
                                     
@@ -723,13 +793,14 @@ class DecimationFourier(Electrode):
     # Density of states (DOS) does'nt really makes sense here. Maybe get rid of it.
 
     def __init__(self, w, interaction_range, interact_potential, atom_type, lattice_constant, left, right, 
-                 N_y, N_y_scatter, M_E, M_C, k_el_x, k_el_y, k_el_xy, k_coupl_x, k_coupl_xy, N_q, batch_size=100): 
+                 N_y, N_y_scatter, M_E, M_C, k_el_x, k_el_y, k_el_xy, k_coupl_x, k_coupl_xy, N_q, batch_size=100,
+                 calculate_bandstructure=False): 
         
         super().__init__(w, interaction_range, interact_potential, atom_type, lattice_constant, left, right)
-        self.q_y = np.linspace(-np.pi, np.pi, N_q, endpoint=False)
+        #self.q_y = np.linspace(-np.pi, np.pi, N_q, endpoint=False)
 
-        #self.q_y = 2 * np.pi / 1 * np.fft.fftfreq(N_q, d=1)
-        #self.q_y.sort()
+        ly = np.linspace(-N_q / 2, N_q / 2 - 1)
+        self.q_y = ly / N_q
 
         self.batch_size = batch_size
         self.N_y = N_y
@@ -739,7 +810,8 @@ class DecimationFourier(Electrode):
         self.M_E = M_E
         self.M_C = M_C
         self.eps = 1E-50
-        self.g0, self.H_01 = self._calculate_g0() #H_01 only needed if N_y == N_y_scatter
+        self.calculate_bandstructure = calculate_bandstructure
+        self.g0, self.H_01, self.band_struct = self._calculate_g0() #H_01 only needed if N_y == N_y_scatter
         self.g, self.center_coupling, self.direct_interaction, self.dos, self.dos_real, self.dos_cpld, self.dos_real_cpld = self._calculate_g()
         
         assert self.N_y - self.N_y_scatter >= 0, (
@@ -764,6 +836,7 @@ class DecimationFourier(Electrode):
         H_00 = mg.build_H_00(self.N_y, self.interaction_range, self.k_values)
         H_01 = mg.build_H_01(self.N_y, self.interaction_range, self.k_values)
         H_NN = mg.build_H_NN(self.N_y, self.interaction_range, self.k_values)
+        band_struct = dict()
 
         assert (0 <= np.abs(np.sum(H_00 + H_01)) < 1E-10), (
             "Sum rule violated! H_00 + H_01 is not zero! Check the force constants and the interaction range."
@@ -776,8 +849,8 @@ class DecimationFourier(Electrode):
             """Worker function for parallelized decimation"""
             results = []
             for w_idx, q_idx, w, q in w_q_pairs:
-                matrix = decimation(w=w, H_00=H_00, H_01=H_01, H_NN=H_NN, eps=self.eps, 
-                                q_y=q, k_values=self.k_values, N_y=self.N_y)
+                H_01_q, H_NN_q, H_00_q = fourier_transform(H_01=H_01, H_NN=H_NN, H_00=H_00, q_y=q, k_values=self.k_values, N_y=self.N_y)
+                matrix = decimation(w=w, H_00=H_00_q, H_01=H_01_q, H_NN=H_NN_q, eps=self.eps) 
                 results.append((w_idx, q_idx, matrix))
             return results
     
@@ -785,6 +858,9 @@ class DecimationFourier(Electrode):
         w_q_combinations = []
         for w_idx, w in enumerate(self.w):
             for q_idx, q in enumerate(self.q_y):
+                if self.calculate_bandstructure and q not in band_struct:
+                    H_01_q, H_NN_q, H_00_q = fourier_transform(H_01=H_01, H_NN=H_NN, H_00=H_00, q_y=q, k_values=self.k_values, N_y=self.N_y)
+                    band_struct[q] = calculate_bandstructure(H_NN=H_NN_q, H_01=H_01_q)
                 w_q_combinations.append((w_idx, q_idx, w, q))
         
         # Batch the combinations
@@ -805,7 +881,7 @@ class DecimationFourier(Electrode):
             for w_idx, q_idx, matrix in batch:
                 g0[w_idx, q_idx] = matrix
 
-        return g0, H_01
+        return g0, H_01, band_struct
 
     def _calculate_g(self) -> tuple[np.ndarray]:
         """
@@ -888,7 +964,7 @@ if __name__ == '__main__':
     w_D = E_D / constants.h_bar
     # convert to har*s/(bohr**2*u)
     w_D = w_D / constants.unit2SI
-    w = np.linspace(w_D * 1E-12, w_D * 1.1, N)
+    w = np.linspace(w_D * 1E-5, w_D * 1.1, N)
     k_c = 0.1 
     batch_size = max(1, int(N / os.cpu_count()))
     #batch_size = 100

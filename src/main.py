@@ -110,7 +110,7 @@ class PhononTransport:
 	"""
 
 	def __init__(self, data_path, sys_descr, electrode_dict_L, electrode_dict_R, scatter_dict, 
-			  E_D, M_E, M_C, N, T_min, T_max, kappa_grid_points):
+			  E_D, M_E, M_C, N, T_min, T_max, kappa_grid_points, calculate_bandstructure=False):
 		self.data_path = data_path
 		self.sys_descr = sys_descr
 		self.electrode_dict_L = electrode_dict_L
@@ -120,6 +120,7 @@ class PhononTransport:
 		self.M_C = M_C
 		self.N = N
 		self.E_D = E_D
+		self.calculate_bandstructure = calculate_bandstructure
 		self.batch_size = max(1, int(N / os.cpu_count()))
 
 		# Check for allowed combinations of electrode and scatter types
@@ -207,7 +208,8 @@ class PhononTransport:
 					k_coupl_xy=electrode_dict["k_coupl_xy"],
 					left=electrode_dict["left"],
 					right=electrode_dict["right"],
-					batch_size=self.batch_size
+					batch_size=self.batch_size,
+					calculate_bandstructure=self.calculate_bandstructure
 				)
 			
 			case "AnalyticalFourier":
@@ -245,7 +247,8 @@ class PhononTransport:
 					k_coupl_xy=electrode_dict["k_coupl_xy"],
 					left=electrode_dict["left"],
 					right=electrode_dict["right"],
-					batch_size=self.batch_size
+					batch_size=self.batch_size,
+					calculate_bandstructure=self.calculate_bandstructure
 				)
 	
 			case _:
@@ -380,6 +383,7 @@ class PhononTransport:
 		)
 		
 		return transmission_calculator.calculate()
+	
 	def calc_kappa(self) -> np.ndarray:
 		"""
 		Calculates the phonon thermal conductance.
@@ -438,6 +442,8 @@ class PhononTransport:
 			self.electrode_dict_R,
 			self.scatter_dict["type"],
 			self.electrode_L,
+			self.electrode_R,
+			self.g_CC_ret,
 			self.E_D,
 			prop
 		)
@@ -466,6 +472,8 @@ class PhononTransport:
 			self.electrode_dict_R,
 			self.scatter_dict["type"],
 			self.electrode_L,
+			self.electrode_R,
+			self.g_CC_ret,
 			self.E_D,
 			prop
 		)
@@ -478,7 +486,7 @@ class PhononTransport:
 			plot_dos=plot_dos
 		)
 
-	def write_coupled_surface_greens_functions(self):
+	def write_surface_greens_functions(self):
 		"""
 		Write coupled surface Green's functions for both electrodes to npz files.
 		Files will be saved in the 'cpld_sfg' subdirectory of the data path.
@@ -490,15 +498,39 @@ class PhononTransport:
 			self.electrode_dict_R,
 			self.scatter_dict["type"],
 			self.electrode_L,
+			self.electrode_R,
+			self.g_CC_ret,
 			self.E_D,
 			prop
 		)
 		
-		plot_service.write_coupled_surface_greens_functions(
+		plot_service.write_surface_greens_functions(
 			self.w,
 			self.electrode_L,
-			self.electrode_R
+			self.electrode_R,
+			self.g_CC_ret
 		)
+
+	def write_band_structure(self):
+		"""
+		Write band structure data for both electrodes to npz files.
+		Files will be saved in the 'band_structure' subdirectory of the data path.
+		Automatically detects electrode type and writes appropriate format.
+		"""
+		plot_service = PlotService(
+			self.data_path,
+			self.sys_descr,
+			self.electrode_dict_L,
+			self.electrode_dict_R,
+			self.scatter_dict["type"],
+			self.electrode_L,
+			self.electrode_R,
+			self.g_CC_ret,
+			self.E_D,
+			prop
+		)
+		
+		plot_service.write_band_structure()
 
 	
 if __name__ == '__main__':
@@ -568,11 +600,16 @@ if __name__ == '__main__':
         N = N,
         T_min = T_min,
         T_max = T_max,
-        kappa_grid_points = kappa_grid_points
+        kappa_grid_points = kappa_grid_points,
+        calculate_bandstructure = config["data_output"].get("calculate_bandstructure", False)
     )
     
     PT.plot_transport(plot_data=config["data_output"]["plot_transmission"])
     PT.plot_dos(plot_dos=config["data_output"]["plot_dos"])
-    PT.write_coupled_surface_greens_functions()
+    PT.write_surface_greens_functions()
+    
+    # Write band structure only if enabled in config
+    if config["data_output"].get("calculate_bandstructure", False):
+        PT.write_band_structure()
 	
     print("debug")

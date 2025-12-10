@@ -6,7 +6,9 @@ the acoustic sum rule.
 
 import numpy as np
 
-def lagrangian1(K, dimension=3):
+import numpy as np
+
+def lagrangian(K, dimension=3):
     '''
     Lagrange-multiplier formalism to adjust force-constant matrix K in a way to fulfill the acoustic sum rule ASR. 
     The method is implemented according to:
@@ -14,79 +16,68 @@ def lagrangian1(K, dimension=3):
     PHYSICAL REVIEW B 77, 033418 2008
     DOI: 10.1103/PhysRevB.77.033418
     '''
-    def extract_displacement_modes(K, dim=dimension):
 
-        thresh = -1E-9
-        
-        eigenvalues, eigenvectors = np.linalg.eigh(K)  # eigh für symmetrische K
-        sorted_indices = list()
-        for i, eigval in enumerate(eigenvalues):
-            if eigval > thresh:
-                sorted_indices.append(i)
+    def extract_displacement_modes(K, dimension):
+        eigenvalues, eigenvectors = np.linalg.eigh(K)
+        sorted_indices = np.argsort(eigenvalues)
 
-        if dim == 3:
-            R = eigenvectors[:, sorted_indices[:6]].T
-        elif dim == 2:
-            R = eigenvectors[:, sorted_indices[:4]].T
-        elif dim == 1:
+        if dimension == 3:
+            R = eigenvectors[:, sorted_indices[:6]].T 
+        elif dimension == 2:
+            R = eigenvectors[:, sorted_indices[:2]].T
+        elif dimension == 1:
             R = eigenvectors[:, sorted_indices[:1]].T 
 
-        return R
-    
+        return R 
+
     def calculate_B(K, R):
-
-        n_constraints, n_rows = R.shape
+        n_constraints = R.shape[0]
+        n_rows = K.shape[0]
         
-        # Initialize B in the right form
-        B = np.zeros((n_constraints, n_constraints, n_rows, n_rows))
-        term1 = 0.25 * np.einsum('ik,mk,nk->mni', K**2, R, R)
-        term2 = 0.25 * np.einsum('ij,mi,nj->mnij', K**2, R, R)
+        K_sqr = K**2
+        term1_partial = np.einsum('ik, mk, nk -> nmi', K_sqr, R, R, optimize=True)
         
-        # Construct B
-        B += np.einsum('mni,ij->mnij', term1, np.eye(n_rows))  
-        B += term2  
+        B_term1 = np.zeros((n_constraints, n_constraints, n_rows, n_rows))
+        for n in range(n_constraints):
+            for m in range(n_constraints):
+                np.fill_diagonal(B_term1[n, m, :, :], term1_partial[n, m, :])
+        
+        B_term1 *= 0.25
+        B_term2 = 0.25 * np.einsum('mi, nj, ij -> nmij', R, R, K_sqr, optimize=True)
+        
+        B = B_term1 + B_term2
+        return B 
 
-        return B
-    
     def calculate_a(K, R):
+        a = -np.einsum('ik, mk -> mi', K, R, optimize=True)
+        return a 
 
-        n_constraints, n = R.shape
-        
-        a = -np.einsum('ij,mj->mi', K, R)
-
-        return a
-    
     def solve_lagrange_multipliers(B, a):
+
+        n_constraints, n_rows = a.shape 
+        size = n_constraints * n_rows
+        B_full = B.transpose(0, 2, 1, 3).reshape(size, size)
         
-        n_constraints, n_rows = a.shape  
+        a_flat = a.reshape((size,)) 
+        lambda_full = np.linalg.lstsq(B_full, a_flat, rcond=None)[0] 
         
-        # Reshape B to (n_constraints * n_rows) x (n_constraints * n_rows) matrix
-        B_full = B.transpose(0, 2, 1, 3).reshape(n_constraints * n_rows, n_constraints * n_rows)
-        
-        # Reshape a to a vector of shape (n_constraints * n_rows)
-        a_full = a.reshape(n_constraints * n_rows)
-        
-        try:
-            lambda_full = np.linalg.solve(B_full, a_full)
-        except np.linalg.LinAlgError as e:
-            print("Singular matrix: {}".format(e))
-            # try a regularization
-            lambda_full = np.linalg.solve(B_full + 1e-8 * np.eye(B_full.shape[0]), a_full)
-            #lambda_full = np.linalg.pinv(B_full) @ a_full  # Verwende Pseudoinverse als Fallback
-        
-        # Back to (n_constraints, n_rows) form
         lambda_reshaped = lambda_full.reshape(n_constraints, n_rows)
 
-        return lambda_reshaped
-    
-    def calculate_D(K, R, lambda_):
-    
-        # Berechne D effizient mit np.einsum
-        D = 0.25 * np.einsum('ij,mi,mj->ij', K**2, lambda_, R)
-        D += 0.25 * np.einsum('ij,mj,mi->ij', K**2, lambda_, R)
+        return lambda_reshaped 
 
-        return D
+    def calculate_D(K, R, lambda_):
+        K_sqr = K**2
     
+        term1_partial = np.einsum('mi, mj -> ij', lambda_, R, optimize=True)
+        D_term1 = 0.25 * K_sqr * term1_partial
+
+        term2_partial = np.einsum('mj, mi -> ij', lambda_, R, optimize=True)
+        D_term2 = 0.25 * K_sqr * term2_partial
+        
+        D = D_term1 + D_term2
+        
+        return D 
+
     R = extract_displacement_modes(K, dimension)
     B = calculate_B(K, R)
     a = calculate_a(K, R)
@@ -101,15 +92,15 @@ if __name__ == "__main__":
     # 1D Version (original)
     print("=== 1D Version ===")
     lattice_constant = 3.0
-    k_l = 100
-    k_r = 100
-    k_c = 100
+    k_l = 1e-2
+    k_r = 1e-2
+    k_c = 1e-2
     k_xy = 0
     k_c_xy = 0
-    N_L = 300
-    N_R = 300
+    N_L = 50
+    N_R = 50
     N_C = 2
-    delta = 0.5
+    delta = .5*1e-2
 
     K_1D = np.zeros((N_L + N_C + N_R, N_L + N_C + N_R))
 
@@ -132,9 +123,11 @@ if __name__ == "__main__":
         for j in range(N_L-1):
             if i == j:
                 K_LL[i, j] = 2*k_l
-                K_LL[i+1, j] = -k_l
+                K_LL[i+1, j] = -k_l 
                 K_LL[i, j+1] = -k_l
-    K_LL[-1, -1] = 2*k_l + delta
+    K_LL[-1, -1] = 2*k_l #+ delta
+    K_LL[-2, -1] = -k_l + delta
+    K_LL[-1, -2] = -k_l + delta
     K_LL[0, 0] = k_l
 
     for i in range(N_R):
@@ -143,7 +136,7 @@ if __name__ == "__main__":
                 K_RR[i, j] = 2*k_r
                 K_RR[i+1, j] = -k_r
                 K_RR[i, j+1] = -k_r
-    K_RR[0, 0] = 2*k_r + delta
+    K_RR[0, 0] = 2*k_r #+ delta
     K_RR[-1, -1] = k_r
 
     K_1D[:N_L, :N_L] = K_LL
@@ -156,15 +149,19 @@ if __name__ == "__main__":
     K_1D[N_L+N_C:, N_L:N_L+N_C] = K_RC
     K_1D[N_L:N_L+N_C, N_L+N_C:] = K_CR
 
-    K_tilde_1D = lagrangian1(K_1D, dimension=1)
+    #K_tilde_1D = lagrangian1(K_1D, dimension=1)
+    #K_tilde_1D = lagrangian1(K_1D, dimension=1)
+    K_tilde_1D = lagrangian(K_1D, dimension=1)
     print("K1D:\n", K_1D)
     print(K_tilde_1D)
+    print(np.sum(K_tilde_1D))
     # 2D Version
     #print("\n=== 2D Version ===")
     
     
 
-    delta2d = 0
+    delta2d = 0.
+    delta2dd = 0.5
 
     K_2D = np.array([[ 100.,    0., -100.,    0.,    0.,    0.,    0.,    0.,    0.,
            0.,    0.,    0.],
@@ -174,11 +171,11 @@ if __name__ == "__main__":
            0.,    0.,    0.],
        [   0.,    0.,    0.,    0.,    0.,    0.,    0.,    0.,    0.,
            0.,    0.,    0.],
-       [   0.,    0., -100.,    0.,  200 + delta2d,    0.,  -100.,    0.,    0.,
+       [   0.,    0., -100.,    0.,  200 + delta2d,    0.,  -100 + delta2dd,    0.,    0.,
            0.,    0.,    0.],
        [   0.,    0.,    0.,    0.,    0.,    0.,    0.,    0.,    0.,
            0.,    0.,    0.],
-       [   0.,    0.,    0.,    0.,  -100.,    0.,  200 + delta2d,    0., -100.,
+       [   0.,    0.,    0.,    0.,  -100.+delta2dd,    0.,  200 + delta2d,    0., -100.,
            0.,    0.,    0.],
        [   0.,    0.,    0.,    0.,    0.,    0.,    0.,    0.,    0.,
            0.,    0.,    0.],
@@ -190,12 +187,30 @@ if __name__ == "__main__":
            0.,  100.,    0.],
        [   0.,    0.,    0.,    0.,    0.,    0.,    0.,    0.,    0.,
            0.,    0.,    0.]])
-
-
-   #K2Tilde = lagrangian1(K_2D, dimension=2)
+    
+    #K2Tilde = lagrangian_outdated(K_2D, dimension=2)
     #print(K_2D)
     #print("K2Tilde:\n", K2Tilde)
 
+
+    K3D = np.array([[ 2.65889094e-01, -1.39136905e-06, -9.27579365e-07,
+        -2.65889094e-01,  1.39136905e-06,  9.27579365e-07],
+       [-1.39136905e-06,  1.42791766e-04,  0.00000000e+00,
+         1.39136905e-06, -1.42791766e-04, -0.00000000e+00],
+       [-9.27579365e-07,  0.00000000e+00,  1.42791766e-04,
+         9.27579365e-07, -0.00000000e+00, -1.42791766e-04],
+       [-2.65889094e-01,  1.39136905e-06,  9.27579365e-07,
+         2.65889094e-01, -1.39136905e-06, -9.27579365e-07],
+       [ 1.39136905e-06, -1.42791766e-04, -0.00000000e+00,
+        -1.39136905e-06,  1.42791766e-04,  0.00000000e+00],
+       [ 9.27579365e-07, -0.00000000e+00, -1.42791766e-04,
+        -9.27579365e-07,  0.00000000e+00,  1.42791766e-04]])
+
+    K3D[0,1] *= 100
+    K3D[1,0] *= 100
+    K3Dnew = lagrangian(K3D, dimension=3)
+
+    print("test")
 
 
     # Plot

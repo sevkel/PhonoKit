@@ -24,7 +24,7 @@ class PlotService:
     """
     
     def __init__(self, data_path, sys_descr, electrode_dict_L, electrode_dict_R, 
-                 scatter_type, electrode_L, E_D, prop):
+                 scatter_type, electrode_L, electrode_R, g_CC_ret, E_D, prop):
         """
         Initialize the plot service.
         
@@ -35,6 +35,8 @@ class PlotService:
             electrode_dict_R (dict): Right electrode configuration
             scatter_type (str): Scattering object type
             electrode_L: Left electrode object
+            electrode_R: Right electrode object
+            g_CC_ret: Retarded Green's function
             E_D (float): Debye energy
             prop: Font properties
         """
@@ -44,6 +46,8 @@ class PlotService:
         self.electrode_dict_R = electrode_dict_R
         self.scatter_type = scatter_type
         self.electrode_L = electrode_L
+        self.electrode_R = electrode_R
+        self.g_CC_ret = g_CC_ret
         self.E_D = E_D
         self.prop = prop
     
@@ -201,6 +205,8 @@ class PlotService:
         base_filename = self._generate_base_filename()
         plt.savefig(os.path.join(self.data_path, f"{base_filename}_DOS.pdf"), 
                    bbox_inches='tight')
+        
+        plt.clf()
     
     def _generate_base_filename(self):
         """Generate base filename for saving."""
@@ -221,33 +227,130 @@ class PlotService:
         
         return base
     
-    def write_coupled_surface_greens_functions(self, w, electrode_L, electrode_R):
+    def write_surface_greens_functions(self, w, electrode_L, electrode_R, g_CC_ret):
         """
-        Write coupled surface Green's functions for left and right electrodes to npz files.
+        Write coupled and uncoupled surface Green's functions for left and right electrodes to npz files.
         
         Args:
             w (np.ndarray): Frequency array
-            electrode_L: Left electrode object with g attribute
-            electrode_R: Right electrode object with g attribute
+            electrode_L: Left electrode object with g and g0 attributes
+            electrode_R: Right electrode object with g and g0 attributes
         """
         # Create output directory
         cpld_sfg_path = os.path.join(self.data_path, "cpld_sfg")
+
         if not os.path.exists(cpld_sfg_path):
             os.makedirs(cpld_sfg_path)
         
         base_filename = self._generate_base_filename()
         
         # Save left electrode coupled surface Green's function
-        npz_filename_L = os.path.join(cpld_sfg_path, f"{base_filename}_cpld_g_L.npz")
-        np.savez(npz_filename_L, 
+        npz_filename_cpld_L = os.path.join(cpld_sfg_path, f"{base_filename}_cpld_g_L.npz")
+        np.savez(npz_filename_cpld_L, 
                 w=w,
                 g_cpld_L=electrode_L.g,
                 electrode_type=self.electrode_dict_L['type'])
         
+        # Save left electrode uncoupled surface Green's function
+        npz_filename_uncpld_L = os.path.join(cpld_sfg_path, f"{base_filename}_uncpld_g0_L.npz")
+        np.savez(npz_filename_uncpld_L,
+                w=w,
+                g0_uncpld_L=electrode_L.g0,
+                electrode_type=self.electrode_dict_L['type'])
+        
         # Save right electrode coupled surface Green's function  
-        npz_filename_R = os.path.join(cpld_sfg_path, f"{base_filename}_cpld_g_R.npz")
-        np.savez(npz_filename_R,
+        npz_filename_cpld_R = os.path.join(cpld_sfg_path, f"{base_filename}_cpld_g_R.npz")
+        np.savez(npz_filename_cpld_R,
                 w=w, 
                 g_cpld_R=electrode_R.g,
                 electrode_type=self.electrode_dict_R['type'])
+        
+        # Save right electrode uncoupled surface Green's function
+        npz_filename_uncpld_R = os.path.join(cpld_sfg_path, f"{base_filename}_uncpld_g0_R.npz")
+        np.savez(npz_filename_uncpld_R,
+                w=w,
+                g0_uncpld_R=electrode_R.g0,
+                electrode_type=self.electrode_dict_R['type'])
+        
+        # Save central part Green's function
+        npz_filename_center_ret = os.path.join(cpld_sfg_path, f"{base_filename}_center_gcc_ret.npz")
+        np.savez(npz_filename_center_ret,
+                w=w,
+                g_CC_ret=g_CC_ret)
+        
 
+    def write_band_structure(self):
+        """
+        Write band structure data for left and right electrodes to npz files.
+        Automatically detects electrode type (Ribbon2D or DecimationFourier) based on attributes.
+        """
+        # Create output directory
+        band_struct_path = os.path.join(self.data_path, "band_structure")
+        if not os.path.exists(band_struct_path):
+            os.makedirs(band_struct_path)
+        
+        base_filename = self._generate_base_filename()
+        
+        # Write left electrode band structure
+        self._write_single_electrode_band_structure(
+            self.electrode_L, 
+            self.electrode_dict_L['type'],
+            band_struct_path,
+            base_filename,
+            "L"
+        )
+        
+        # Write right electrode band structure
+        self._write_single_electrode_band_structure(
+            self.electrode_R,
+            self.electrode_dict_R['type'],
+            band_struct_path,
+            base_filename,
+            "R"
+        )
+    
+    def _write_single_electrode_band_structure(self, electrode, electrode_type_str, 
+                                                output_path, base_filename, side):
+        """
+        Write band structure for a single electrode.
+        
+        Args:
+            electrode: Electrode object (Ribbon2D or DecimationFourier)
+            electrode_type_str: String description of electrode type
+            output_path: Directory path for output files
+            base_filename: Base name for output files
+            side: "L" or "R" for left/right electrode
+        """
+        # Check if DecimationFourier (has band_struct dict)
+        if hasattr(electrode, "band_struct") and electrode.band_struct:
+            # DecimationFourier: band_struct is dict with q_y keys
+            q_y_values = []
+            k_x_arrays = []
+            freqs_arrays = []
+            
+            # Extract data from band_struct dict
+            for q_y, (k_x, freqs) in electrode.band_struct.items():
+                q_y_values.append(q_y)
+                k_x_arrays.append(k_x)
+                freqs_arrays.append(freqs)
+            
+            # Save as single npz with arrays
+            npz_filename = os.path.join(output_path, 
+                                       f"{base_filename}_bandstruct_{side}.npz")
+            np.savez(npz_filename,
+                    electrode_type=electrode_type_str,
+                    q_y_values=np.array(q_y_values),
+                    k_x_arrays=np.array(k_x_arrays, dtype=object),
+                    freqs_arrays=np.array(freqs_arrays, dtype=object))
+            
+        # Check if Ribbon2D (has k_x and freqs arrays)
+        elif hasattr(electrode, "k_x") and hasattr(electrode, "freqs") and electrode.k_x is not None:
+            # Ribbon2D: single band structure
+            npz_filename = os.path.join(output_path,
+                                       f"{base_filename}_bandstruct_{side}.npz")
+            np.savez(npz_filename,
+                    electrode_type=electrode_type_str,
+                    k_x=electrode.k_x,
+                    freqs=electrode.freqs)
+        else:
+            print(f"Info: Electrode {side} has no band structure data (calculate_bandstructure was disabled)")
