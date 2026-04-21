@@ -195,7 +195,7 @@ Compatibility:
 
 1. `calculate_bandstructure` is still accepted and mapped to `write_bandstructure`.
 
-## Installation
+## Dependency installation
 
 ```bash
 pip install -r requirements.txt
