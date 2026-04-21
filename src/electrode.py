@@ -96,7 +96,8 @@ def fourier_transform(H_01, H_NN, H_00=None, k_values=None, q_y=None, N_y=None):
 def calculate_bandstructure(H_NN, H_01, N_kx=201, kx_points=None):
     """
     Compute bandstructure omega(k) for the ribbon (periodic direction).
-    Returns (k_points, freqs) where freqs.shape == (len(k_points), matrix_dim).
+    Returns (k_points, freqs, modes) where freqs.shape == (len(k_points), matrix_dim)
+    and modes.shape == (len(k_points), matrix_dim, matrix_dim).
 
     Args:
         H_NN (np.ndarray): Principal bulk layer
@@ -108,6 +109,7 @@ def calculate_bandstructure(H_NN, H_01, N_kx=201, kx_points=None):
     Returns:
         kx_points (np.ndarray): kx grid points
         freqs (np.ndarray): Corresponding frequencies -> Band structure
+        modes (np.ndarray): Corresponding eigenmodes (eigenvectors)
     """
     
     if kx_points is None:
@@ -115,33 +117,28 @@ def calculate_bandstructure(H_NN, H_01, N_kx=201, kx_points=None):
 
     matrix_dim = H_NN.shape[0]
     freqs = np.zeros((len(kx_points), matrix_dim), dtype=float)
+    modes = np.zeros((len(kx_points), matrix_dim, matrix_dim), dtype=float)
 
     for ik, k in enumerate(kx_points):
         Hk = H_NN + H_01 * np.exp(1j * k) + H_01.T * np.exp(-1j * k)
-        #Hk = 0.5 * (Hk + Hk.T.conj())  # numeric hermiticity
-        vals = np.linalg.eigvals(Hk)
+        vals, vecs = np.linalg.eigh(Hk)
+        
 
         #TODO: Assert max(imag) < thresh, eigh probieren
 
         vals_real = np.real(vals)
         vals_real[vals_real < 0] = 0.0
+        eigenmodes = np.real(vecs)
+
         omegas = np.sqrt(vals_real)
-        freqs[ik, :] = np.sort(omegas)
 
-    if False:
-        import matplotlib.pyplot as plt
-        plt.figure(figsize=(6, 6))
-        for band in range(freqs.shape[1]):
-            plt.plot(kx_points, freqs[:, band], color='black', lw=0.8)
-        plt.xlabel('k')
-        plt.ylabel('omega')
-        plt.title('Ribbon2D bandstructure')
-        plt.grid(True)
-        
-        plt.savefig(r"C://Users//sevke//Desktop//Dev//MA//phonokit//plot//quick_test_res//band_test313_nonperiodic.pdf", bbox_inches='tight')
+        # Sort by frequency and apply same sorting to eigenmodes
+        sort_idx = np.argsort(omegas)
+        freqs[ik, :] = omegas[sort_idx]
+        modes[ik, :, :] = eigenmodes[:, sort_idx]
         
 
-    return kx_points, freqs
+    return kx_points, freqs, modes
 
 def decimation(w, H_00, H_01, H_NN, eps=1E-50) -> np.ndarray:
     """
@@ -618,7 +615,7 @@ class Ribbon2D(Electrode):
         self.eps = 1E-50
         self.batch_size = batch_size
         self.calculate_bandstructure = calculate_bandstructure
-        self.g0, self.H_01, self.k_x, self.freqs = self._calculate_g0()  # H_01 only needed if N_y == N_y_scatter
+        self.g0, self.H_01, self.k_x, self.freqs, self.modes = self._calculate_g0()  # H_01 only needed if N_y == N_y_scatter
         self.g, self.center_coupling, self.direct_interaction, \
         self.dos, self.dos_real, self.dos_cpld, self.dos_real_cpld = self._calculate_g()
 
@@ -645,9 +642,9 @@ class Ribbon2D(Electrode):
         H_01 = mg.build_H_01(self.N_y, self.interaction_range, k_values=self.k_values)
 
         if self.calculate_bandstructure:
-            k_x_pts, freqs = calculate_bandstructure(H_NN=H_NN, H_01=H_01)
+            k_x_pts, freqs, modes = calculate_bandstructure(H_NN=H_NN, H_01=H_01)
         else:
-            k_x_pts, freqs = None, None
+            k_x_pts, freqs, modes = None, None, None
 
         assert (0 <= np.abs(np.sum(H_00 + H_01)) < 1E-10), (
             "Sum rule violated! H_00 + H_01 is not zero! Check the force constants and the interaction range."
@@ -685,7 +682,7 @@ class Ribbon2D(Electrode):
             for w_idx, matrix in batch:
                 g0[w_idx] = matrix
 
-        return g0, H_01, k_x_pts, freqs
+        return g0, H_01, k_x_pts, freqs, modes
 
     def _calculate_g(self) -> tuple[np.ndarray]: 
                                     
@@ -797,10 +794,9 @@ class DecimationFourier(Electrode):
                  calculate_bandstructure=False): 
         
         super().__init__(w, interaction_range, interact_potential, atom_type, lattice_constant, left, right)
-        #self.q_y = np.linspace(-np.pi, np.pi, N_q, endpoint=False)
-
-        ly = np.linspace(-N_q / 2, N_q / 2 - 1)
-        self.q_y = ly / N_q
+       
+        ly = np.linspace(-N_q / 2, N_q / 2 - 1, N_q)
+        self.q_y = (ly / N_q) * 2 * np.pi
 
         self.batch_size = batch_size
         self.N_y = N_y

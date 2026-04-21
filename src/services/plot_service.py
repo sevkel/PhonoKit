@@ -24,7 +24,7 @@ class PlotService:
     """
     
     def __init__(self, data_path, sys_descr, electrode_dict_L, electrode_dict_R, 
-                 scatter_type, electrode_L, electrode_R, g_CC_ret, E_D, prop):
+                 scatter_type, electrode_L, electrode_R, g_CC_ret, E, prop):
         """
         Initialize the plot service.
         
@@ -48,10 +48,11 @@ class PlotService:
         self.electrode_L = electrode_L
         self.electrode_R = electrode_R
         self.g_CC_ret = g_CC_ret
-        self.E_D = E_D
+        self.E = E
         self.prop = prop
     
-    def plot_transport(self, w, T, kappa, temperature, write_data=True, plot_data=False):
+    def plot_transport(self, w, T, kappa, temperature, write_trans=True,
+                      write_trans_dos=False, write_kappa=False, plot_data=False):
         """
         Plot and save transport data.
         
@@ -60,11 +61,21 @@ class PlotService:
             T (np.ndarray): Transmission array
             kappa (np.ndarray): Thermal conductance array
             temperature (np.ndarray): Temperature array
-            write_data (bool): Whether to write data files
+            write_trans (bool): Whether to write transmission data to trans/
+            write_trans_dos (bool): Whether to write transmission data to trans+dos/
+            write_kappa (bool): Whether to write kappa data to kappa/
             plot_data (bool): Whether to generate plots
         """
-        if write_data:
-            self._write_transport_data(w, T, kappa, temperature)
+        if write_trans or write_trans_dos or write_kappa:
+            self._write_transport_data(
+                w,
+                T,
+                kappa,
+                temperature,
+                write_trans=write_trans,
+                write_trans_dos=write_trans_dos,
+                write_kappa=write_kappa
+            )
         
         print(f'TauMax = {max(T)}, TauMin = {min(T)}, T_0 = {T[0]}')
         print(f'KappaMax = {max(kappa)}, KappaMin = {min(kappa)}')
@@ -72,7 +83,8 @@ class PlotService:
         if plot_data:
             self._create_transport_plot(w, T)
     
-    def plot_dos(self, w, electrode_L, electrode_R, write_data=True, plot_dos=False):
+    def plot_dos(self, w, electrode_L, electrode_R, write_data=False,
+                 write_trans_dos=False, plot_dos=False):
         """
         Plot and save density of states data.
         
@@ -81,6 +93,7 @@ class PlotService:
             electrode_L: Left electrode object
             electrode_R: Right electrode object
             write_data (bool): Whether to write data files
+            write_trans_dos (bool): Whether to also write DOS to trans+dos/
             plot_dos (bool): Whether to generate plots
         """
         dos_L = electrode_L.dos
@@ -98,45 +111,55 @@ class PlotService:
         
         if write_data:
             self._write_dos_data(w, dos_L, dos_real_L, dos_R, dos_real_R, 
-                               dos_L_cpld, dos_real_L_cpld, dos_R_cpld, dos_real_R_cpld)
+                               dos_L_cpld, dos_real_L_cpld, dos_R_cpld, dos_real_R_cpld,
+                               write_trans_dos=write_trans_dos)
         
         if plot_dos:
             self._create_dos_plot(w, dos_real_L_cpld, dos_L_cpld, 
                                 dos_real_R_cpld, dos_R_cpld)
     
-    def _write_transport_data(self, w, T, kappa, temperature):
+    def _write_transport_data(self, w, T, kappa, temperature, write_trans=True,
+                              write_trans_dos=False, write_kappa=False):
         """Write transport data to files."""
         path_trans = os.path.join(self.data_path, "trans")
         path_transdos = os.path.join(self.data_path, "trans+dos")
         path_kappa = os.path.join(self.data_path, "kappa")
-        
-        for path in [path_trans, path_transdos, path_kappa]:
-            if not os.path.exists(path):
-                os.makedirs(path)
+
+        if write_trans and not os.path.exists(path_trans):
+            os.makedirs(path_trans)
+        if write_trans_dos and not os.path.exists(path_transdos):
+            os.makedirs(path_transdos)
+        if write_kappa and not os.path.exists(path_kappa):
+            os.makedirs(path_kappa)
         
         base_filename = self._generate_base_filename()
         
-        top.write_plot_data(
-            os.path.join(path_trans, f"{base_filename}.dat"),
-            (w, T), "w (sqrt(har/(bohr**2*u))), T_vals")
-        
-        top.write_plot_data(
-            os.path.join(path_transdos, f"{base_filename}.dat"),
-            (w, T), "w (sqrt(har/(bohr**2*u))), T_vals")
-        
-        top.write_plot_data(
-            os.path.join(path_kappa, f"{base_filename}_KAPPA.dat"),
-            (temperature, kappa), "T (K), kappa (pW/K)")
+        if write_trans:
+            top.write_plot_data(
+                os.path.join(path_trans, f"{base_filename}.dat"),
+                (w, T), "w (sqrt(har/(bohr**2*u))), T_vals")
+
+        if write_trans_dos:
+            top.write_plot_data(
+                os.path.join(path_transdos, f"{base_filename}.dat"),
+                (w, T), "w (sqrt(har/(bohr**2*u))), T_vals")
+
+        if write_kappa:
+            top.write_plot_data(
+                os.path.join(path_kappa, f"{base_filename}_KAPPA.dat"),
+                (temperature, kappa), "T (K), kappa (pW/K)")
     
     def _write_dos_data(self, w, dos_L, dos_real_L, dos_R, dos_real_R,
-                       dos_L_cpld, dos_real_L_cpld, dos_R_cpld, dos_real_R_cpld):
+                       dos_L_cpld, dos_real_L_cpld, dos_R_cpld, dos_real_R_cpld,
+                       write_trans_dos=False):
         """Write DOS data to files."""
         path_dos = os.path.join(self.data_path, "dos")
         path_transdos = os.path.join(self.data_path, "trans+dos")
-        
-        for path in [path_dos, path_transdos]:
-            if not os.path.exists(path):
-                os.makedirs(path)
+
+        if not os.path.exists(path_dos):
+            os.makedirs(path_dos)
+        if write_trans_dos and not os.path.exists(path_transdos):
+            os.makedirs(path_transdos)
         
         base_filename = self._generate_base_filename()
         
@@ -149,10 +172,11 @@ class PlotService:
         top.write_plot_data(
             os.path.join(path_dos, f"{base_filename}_DOS.dat"),
             data_tuple, header)
-        
-        top.write_plot_data(
-            os.path.join(path_transdos, f"{base_filename}_DOS.dat"),
-            data_tuple, header)
+
+        if write_trans_dos:
+            top.write_plot_data(
+                os.path.join(path_transdos, f"{base_filename}_DOS.dat"),
+                data_tuple, header)
     
     def _create_transport_plot(self, w, T):
         """Create and save transmission plot."""
@@ -162,7 +186,7 @@ class PlotService:
         ax1.plot(w, T)
         ax1.set_xlabel(r'Phonon Energy ($\mathrm{meV}$)', fontsize=12, fontproperties=self.prop)
         ax1.set_ylabel(r'$\tau_{\mathrm{ph}}$', fontsize=12, fontproperties=self.prop)
-        ax1.set_xlim(0, 1 * self.E_D)
+        ax1.set_xlim(self.E[0], 1 * self.E[1])
         ax1.set_xticklabels(ax1.get_xticks(), fontproperties=self.prop)
         ax1.set_yticklabels(ax1.get_yticks(), fontproperties=self.prop)
         ax1.grid()
@@ -210,10 +234,17 @@ class PlotService:
     
     def _generate_base_filename(self):
         """Generate base filename for saving."""
-        base = (f"{self.sys_descr}___PT_elL={self.electrode_dict_L['type']}_"
-               f"elR={self.electrode_dict_R['type']}_"
-               f"CC={self.scatter_type}_"
-               f"intrange={self.electrode_L.interaction_range}")
+        
+        ### Long, detailed basename
+
+        #base = (f"{self.sys_descr}_E=[{self.E[0]}, {self.E[1]}]__PT_elL={self.electrode_dict_L['type']}_"
+        #       f"elR={self.electrode_dict_R['type']}_"
+        #       f"CC={self.scatter_type}_"
+        #       f"intrange={self.electrode_L.interaction_range}")
+
+        ### Short basename
+
+        base = f"{self.sys_descr}"
         
         try:
             base += f"_kcoupl_x={self.electrode_dict_L['k_coupl_x']}"
@@ -227,7 +258,7 @@ class PlotService:
         
         return base
     
-    def write_surface_greens_functions(self, w, electrode_L, electrode_R, g_CC_ret):
+    def write_surface_greens_functions(self, w, electrode_L, electrode_R, g_CC_ret, write_data=False):
         """
         Write coupled and uncoupled surface Green's functions for left and right electrodes to npz files.
         
@@ -236,47 +267,50 @@ class PlotService:
             electrode_L: Left electrode object with g and g0 attributes
             electrode_R: Right electrode object with g and g0 attributes
         """
-        # Create output directory
-        cpld_sfg_path = os.path.join(self.data_path, "cpld_sfg")
 
-        if not os.path.exists(cpld_sfg_path):
-            os.makedirs(cpld_sfg_path)
-        
-        base_filename = self._generate_base_filename()
-        
-        # Save left electrode coupled surface Green's function
-        npz_filename_cpld_L = os.path.join(cpld_sfg_path, f"{base_filename}_cpld_g_L.npz")
-        np.savez(npz_filename_cpld_L, 
-                w=w,
-                g_cpld_L=electrode_L.g,
-                electrode_type=self.electrode_dict_L['type'])
-        
-        # Save left electrode uncoupled surface Green's function
-        npz_filename_uncpld_L = os.path.join(cpld_sfg_path, f"{base_filename}_uncpld_g0_L.npz")
-        np.savez(npz_filename_uncpld_L,
-                w=w,
-                g0_uncpld_L=electrode_L.g0,
-                electrode_type=self.electrode_dict_L['type'])
-        
-        # Save right electrode coupled surface Green's function  
-        npz_filename_cpld_R = os.path.join(cpld_sfg_path, f"{base_filename}_cpld_g_R.npz")
-        np.savez(npz_filename_cpld_R,
-                w=w, 
-                g_cpld_R=electrode_R.g,
-                electrode_type=self.electrode_dict_R['type'])
-        
-        # Save right electrode uncoupled surface Green's function
-        npz_filename_uncpld_R = os.path.join(cpld_sfg_path, f"{base_filename}_uncpld_g0_R.npz")
-        np.savez(npz_filename_uncpld_R,
-                w=w,
-                g0_uncpld_R=electrode_R.g0,
-                electrode_type=self.electrode_dict_R['type'])
-        
-        # Save central part Green's function
-        npz_filename_center_ret = os.path.join(cpld_sfg_path, f"{base_filename}_center_gcc_ret.npz")
-        np.savez(npz_filename_center_ret,
-                w=w,
-                g_CC_ret=g_CC_ret)
+        if write_data:
+            
+            # Create output directory
+            cpld_sfg_path = os.path.join(self.data_path, "cpld_sfg")
+
+            if not os.path.exists(cpld_sfg_path):
+                os.makedirs(cpld_sfg_path)
+            
+            base_filename = self._generate_base_filename()
+            
+            # Save left electrode coupled surface Green's function
+            npz_filename_cpld_L = os.path.join(cpld_sfg_path, f"{base_filename}_cpld_g_L.npz")
+            np.savez(npz_filename_cpld_L, 
+                    w=w,
+                    g_cpld_L=electrode_L.g,
+                    electrode_type=self.electrode_dict_L['type'])
+            
+            # Save left electrode uncoupled surface Green's function
+            npz_filename_uncpld_L = os.path.join(cpld_sfg_path, f"{base_filename}_uncpld_g0_L.npz")
+            np.savez(npz_filename_uncpld_L,
+                    w=w,
+                    g0_uncpld_L=electrode_L.g0,
+                    electrode_type=self.electrode_dict_L['type'])
+            
+            # Save right electrode coupled surface Green's function  
+            npz_filename_cpld_R = os.path.join(cpld_sfg_path, f"{base_filename}_cpld_g_R.npz")
+            np.savez(npz_filename_cpld_R,
+                    w=w, 
+                    g_cpld_R=electrode_R.g,
+                    electrode_type=self.electrode_dict_R['type'])
+            
+            # Save right electrode uncoupled surface Green's function
+            npz_filename_uncpld_R = os.path.join(cpld_sfg_path, f"{base_filename}_uncpld_g0_R.npz")
+            np.savez(npz_filename_uncpld_R,
+                    w=w,
+                    g0_uncpld_R=electrode_R.g0,
+                    electrode_type=self.electrode_dict_R['type'])
+            
+            # Save central part Green's function
+            npz_filename_center_ret = os.path.join(cpld_sfg_path, f"{base_filename}_center_gcc_ret.npz")
+            np.savez(npz_filename_center_ret,
+                    w=w,
+                    g_CC_ret=g_CC_ret)
         
 
     def write_band_structure(self):
@@ -327,12 +361,14 @@ class PlotService:
             q_y_values = []
             k_x_arrays = []
             freqs_arrays = []
+            modes_arrays = []
             
             # Extract data from band_struct dict
-            for q_y, (k_x, freqs) in electrode.band_struct.items():
+            for q_y, (k_x, freqs, modes) in electrode.band_struct.items():
                 q_y_values.append(q_y)
                 k_x_arrays.append(k_x)
                 freqs_arrays.append(freqs)
+                modes_arrays.append(modes)
             
             # Save as single npz with arrays
             npz_filename = os.path.join(output_path, 
@@ -341,7 +377,8 @@ class PlotService:
                     electrode_type=electrode_type_str,
                     q_y_values=np.array(q_y_values),
                     k_x_arrays=np.array(k_x_arrays, dtype=object),
-                    freqs_arrays=np.array(freqs_arrays, dtype=object))
+                    freqs_arrays=np.array(freqs_arrays, dtype=object),
+                    modes_arrays=np.array(modes_arrays, dtype=object))
             
         # Check if Ribbon2D (has k_x and freqs arrays)
         elif hasattr(electrode, "k_x") and hasattr(electrode, "freqs") and electrode.k_x is not None:
@@ -351,6 +388,7 @@ class PlotService:
             np.savez(npz_filename,
                     electrode_type=electrode_type_str,
                     k_x=electrode.k_x,
-                    freqs=electrode.freqs)
+                    freqs=electrode.freqs,
+                    modes=electrode.modes if hasattr(electrode, "modes") else None)
         else:
             print(f"Info: Electrode {side} has no band structure data (calculate_bandstructure was disabled)")

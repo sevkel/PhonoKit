@@ -4,8 +4,8 @@ Phononic Transport Calculations
 Main module for phonon transport calculations including data output and visualization.
 Implements the theoretical framework from:
 
-M. Bürkle, Thomas J. Hellmuth, F. Pauly, Y. Asai, First-principles calculation of the 
-thermoelectric figure of merit for [2,2]paracyclophane-based single-molecule junctions, 
+M. Bürkle, Thomas J. Hellmuth, F. Pauly, Y. Asai, First-principles calculation of the
+thermoelectric figure of merit for [2,2]paracyclophane-based single-molecule junctions,
 PHYSICAL REVIEW B 91, 165419 (2015)
 DOI: 10.1103/PhysRevB.91.165419
 
@@ -21,30 +21,52 @@ Date: 2025
 """
 
 # Standard library imports
-import sys
-import json
 import os
+import sys
 
-import numpy as np
 import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+import numpy as np
+import yaml
+
+matplotlib.use("Agg")
 import matplotlib.font_manager as fm
+import matplotlib.pyplot as plt
 import scienceplots
 
-# Local imports
-from model_systems import * 
-import electrode as el
 import calculate_kappa as ck
-from utils import constants as const
+import electrode as el
+
+# Local imports
+from model_systems import *
 
 # Service imports
 from services import (
-    SigmaCalculator,
     GreensFunctionCalculator,
+    PlotService,
+    SigmaCalculator,
     TransmissionCalculator,
-    PlotService
-) 
+)
+from utils import constants as const
+
+
+class PhonoKitLoader(yaml.SafeLoader):
+    """Custom YAML loader with project-specific tags."""
+
+
+def _join_constructor(loader, node):
+    """Join path-like YAML sequence entries using '/' separators."""
+    parts = [str(part) for part in loader.construct_sequence(node)]
+    if not parts:
+        return ""
+
+    joined = parts[0].rstrip("/\\")
+    for part in parts[1:]:
+        joined = f"{joined}/{part.lstrip('/\\')}"
+
+    return joined
+
+
+PhonoKitLoader.add_constructor("!join", _join_constructor)
 
 
 # ============================================================================
@@ -52,510 +74,601 @@ from services import (
 # ============================================================================
 
 # For plotting
-matplotlib.rcParams['font.family'] = r'C://Users//sevke//Desktop//Dev//fonts//fira_sans//FiraSans-Regular.ttf'
-prop = fm.FontProperties(fname=r'C://Users//sevke//Desktop//Dev//fonts//fira_sans//FiraSans-Regular.ttf')
-plt.style.use(['science', 'notebook', 'no-latex'])
+matplotlib.rcParams["font.family"] = (
+    r"C://Users//sevke//Desktop//Dev//fonts//fira_sans//FiraSans-Regular.ttf"
+)
+prop = fm.FontProperties(
+    fname=r"C://Users//sevke//Desktop//Dev//fonts//fira_sans//FiraSans-Regular.ttf"
+)
+plt.style.use(["science", "notebook", "no-latex"])
 
 
 # ============================================================================
 # MAIN TRANSPORT CLASS
 # ============================================================================
 
+
 class PhononTransport:
-	"""
-	Phonon Transport Calculation Engine
-	
-	Implements phonon transport calculations based on the theoretical framework from:
-	M. Bürkle, Thomas J. Hellmuth, F. Pauly, Y. Asai, First-principles calculation of the 
-	thermoelectric figure of merit for [2,2]paracyclophane-based single-molecule junctions, 
-	PHYSICAL REVIEW B 91, 165419 (2015)
-	DOI: 10.1103/PhysRevB.91.165419
+    """
+    Phonon Transport Calculation Engine
 
-	Supports multiple electrode configurations and scattering objects with:
-	- 4D indexing for frequency-momentum space calculations
-	- Parallel computation for performance optimization
-	- Comprehensive thermal conductance calculations
-	- Automatic data output and visualization
+    Implements phonon transport calculations based on the theoretical framework from:
+    M. Bürkle, Thomas J. Hellmuth, F. Pauly, Y. Asai, First-principles calculation of the
+    thermoelectric figure of merit for [2,2]paracyclophane-based single-molecule junctions,
+    PHYSICAL REVIEW B 91, 165419 (2015)
+    DOI: 10.1103/PhysRevB.91.165419
 
-	Args:
-		data_path (str): Output directory for calculated data
-		sys_descr (str): System description identifier for data organization
-		electrode_dict (dict): Electrode configuration parameters
-		scatter_dict (dict): Scattering object configuration parameters
-		E_D (float): Debye energy in meV
-		M_E (str): Atom type in the reservoir electrodes
-		M_C (str): Atom type in the central scattering region
-		N (int): Number of frequency grid points
-		T_min (float): Minimum temperature for thermal conductance calculation
-		T_max (float): Maximum temperature for thermal conductance calculation
-		kappa_grid_points (int): Number of temperature grid points for thermal conductance
+    Supports multiple electrode configurations and scattering objects with:
+    - 4D indexing for frequency-momentum space calculations
+    - Parallel computation for performance optimization
+    - Comprehensive thermal conductance calculations
+    - Automatic data output and visualization
 
-	Attributes:
-		data_path (str): Output directory path
-		sys_descr (str): System description string
-		electrode_dict (dict): Electrode configuration dictionary
-		scatter_dict (dict): Scattering object configuration dictionary
-		E_D (float): Debye energy in meV.
-		M_E (str): Atom type in the reservoir.
-		M_C (str): Atom type coupled to the reservoir.
-		N (int): Number of grid points.
-		T_min (float): Minimum temperature for thermal conductance calculation.
-		T_max (float): Maximum temperature for thermal conductance calculation.
-		kappa_grid_points (int): Number of grid points for thermal conductance.
+    Args:
+            data_path (str): Output directory for calculated data
+            sys_descr (str): System description identifier for data organization
+            electrode_dict (dict): Electrode configuration parameters
+            scatter_dict (dict): Scattering object configuration parameters
+            E_D (float): Debye energy in meV
+            M_E (str): Atom type in the reservoir electrodes
+            M_C (str): Atom type in the central scattering region
+            N (int): Number of frequency grid points
+            T_min (float): Minimum temperature for thermal conductance calculation
+            T_max (float): Maximum temperature for thermal conductance calculation
+            kappa_grid_points (int): Number of temperature grid points for thermal conductance
 
-	
-	Raises:
-		ValueError: If the electrode-center models don't match reasonable.
+    Attributes:
+            data_path (str): Output directory path
+            sys_descr (str): System description string
+            electrode_dict (dict): Electrode configuration dictionary
+            scatter_dict (dict): Scattering object configuration dictionary
+            E_D (float): Debye energy in meV.
+            M_E (str): Atom type in the reservoir.
+            M_C (str): Atom type coupled to the reservoir.
+            N (int): Number of grid points.
+            T_min (float): Minimum temperature for thermal conductance calculation.
+            T_max (float): Maximum temperature for thermal conductance calculation.
+            kappa_grid_points (int): Number of grid points for thermal conductance.
 
-	"""
 
-	def __init__(self, data_path, sys_descr, electrode_dict_L, electrode_dict_R, scatter_dict, 
-			  E_D, M_E, M_C, N, T_min, T_max, kappa_grid_points, calculate_bandstructure=False):
-		self.data_path = data_path
-		self.sys_descr = sys_descr
-		self.electrode_dict_L = electrode_dict_L
-		self.electrode_dict_R = electrode_dict_R
-		self.scatter_dict = scatter_dict
-		self.M_E = M_E
-		self.M_C = M_C
-		self.N = N
-		self.E_D = E_D
-		self.calculate_bandstructure = calculate_bandstructure
-		self.batch_size = max(1, int(N / os.cpu_count()))
+    Raises:
+            ValueError: If the electrode-center models don't match reasonable.
 
-		# Check for allowed combinations of electrode and scatter types
-		if (self.electrode_dict_L["type"], self.electrode_dict_R["type"], self.scatter_dict["type"]) not in [
-			("DebyeModel", "DebyeModel", "FiniteLattice2D"),
-			("DebyeModel", "DebyeModel", "Chain1D"),
-			("Ribbon2D", "Ribbon2D", "FiniteLattice2D"), 
-			("Ribbon2D", "Ribbon2D", "Chain1D"),
-			("Chain1D", "Chain1D", "Chain1D"),
-			("AnalyticalFourier", "AnalyticalFourier", "FiniteLattice2D"),
-			("AnalyticalFourier", "AnalyticalFourier", "Chain1D"),
-			("DecimationFourier", "DecimationFourier", "FiniteLattice2D"),
-			("DecimationFourier", "DecimationFourier", "Chain1D")
-		]:
-			raise ValueError(f"Invalid combination of electrode type '{self.electrode_L.type}', '{self.electrode_R.type}' and scatter type '{self.scatter.type}'")
+    """
 
-		self.temperature = np.linspace(T_min, T_max, kappa_grid_points)
-		self.w = np.linspace(1E-3, self.E_D * 1.1, N) #new
-		self.i = np.linspace(0, self.N, self.N, False, dtype=int)
+    def __init__(
+        self,
+        data_path,
+        sys_descr,
+        electrode_dict_L,
+        electrode_dict_R,
+        scatter_dict,
+        E,
+        M_E,
+        M_C,
+        N,
+        T_min,
+        T_max,
+        kappa_grid_points,
+        calculate_bandstructure=False,
+        output_options=None,
+    ):
+        self.data_path = data_path
+        self.sys_descr = sys_descr
+        self.electrode_dict_L = electrode_dict_L
+        self.electrode_dict_R = electrode_dict_R
+        self.scatter_dict = scatter_dict
+        self.M_E = M_E
+        self.M_C = M_C
+        self.N = N
+        self.E = E
+        self.calculate_bandstructure = calculate_bandstructure
+        self.output_options = output_options or {}
+        self.batch_size = max(1, int(N / os.cpu_count()))
 
-		print("########## Setting up the scatter region ##########")
-		self.scatter = self.__initialize_scatter(self.scatter_dict, self.electrode_dict_L, self.electrode_dict_R)
-  
-		print("########## Setting up the electrodes ##########")
-		self.electrode_L = self.__initialize_electrode(self.electrode_dict_L)
-		self.electrode_R = self.__initialize_electrode(self.electrode_dict_R)
+        # Check for allowed combinations of electrode and scatter types
+        if (
+            self.electrode_dict_L["type"],
+            self.electrode_dict_R["type"],
+            self.scatter_dict["type"],
+        ) not in [
+            ("DebyeModel", "DebyeModel", "FiniteLattice2D"),
+            ("DebyeModel", "DebyeModel", "Chain1D"),
+            ("Ribbon2D", "Ribbon2D", "FiniteLattice2D"),
+            ("Ribbon2D", "Ribbon2D", "Chain1D"),
+            ("Chain1D", "Chain1D", "Chain1D"),
+            ("AnalyticalFourier", "AnalyticalFourier", "FiniteLattice2D"),
+            ("AnalyticalFourier", "AnalyticalFourier", "Chain1D"),
+            ("DecimationFourier", "DecimationFourier", "FiniteLattice2D"),
+            ("DecimationFourier", "DecimationFourier", "Chain1D"),
+        ]:
+            raise ValueError(
+                f"Invalid combination of electrode type '{self.electrode_L.type}', '{self.electrode_R.type}' and scatter type '{self.scatter.type}'"
+            )
 
-		self.D = self.scatter.hessian 
-		self.sigma_L, self.sigma_R = self.calculate_sigma()
-		self.g_CC_ret, self.g_CC_adv = self.calculate_G_cc()
-		self.T = self.calculate_transmission()
-		self.kappa = self.calc_kappa()
-	
-	def __initialize_electrode(self, electrode_dict) -> object:
-		"""
-		Initializes the electrode based on the provided configuration.
+        self.temperature = np.linspace(T_min, T_max, kappa_grid_points)
+        self.w = np.linspace(E[0], E[1], N)
+        self.i = np.linspace(0, self.N, self.N, False, dtype=int)
 
-		Args:
-			electrode_dict (dict): Dictionary containing the electrode configuration.
+        print("========== Setting up the scatter region ==========")
+        self.scatter = self.__initialize_scatter(
+            self.scatter_dict, self.electrode_dict_L, self.electrode_dict_R
+        )
 
-		Returns:
-			Electrode (object): Initialized electrode object.
+        print("========== Setting up the electrodes ==========")
+        self.electrode_L = self.__initialize_electrode(self.electrode_dict_L)
+        self.electrode_R = self.__initialize_electrode(self.electrode_dict_R)
 
-		Raises:
-			ValueError: If a electrode type is undefined or unsupported.
+        self.D = self.scatter.hessian
+        self.sigma_L, self.sigma_R = self.calculate_sigma()
+        self.g_CC_ret, self.g_CC_adv = self.calculate_G_cc()
+        self.T = self.calculate_transmission()
+        self.kappa = self.calc_kappa()
 
-		"""
-		
-		match electrode_dict["type"]:
+    def __initialize_electrode(self, electrode_dict) -> object:
+        """
+        Initializes the electrode based on the provided configuration.
 
-			case "DebyeModel":
-				return el.DebyeModel(
-					self.w,
-					k_coupl_x = electrode_dict["k_coupl_x"],
-					k_coupl_xy = electrode_dict["k_coupl_xy"],
-					w_D = self.E_D 
-				)
-			
-			case "Chain1D":
-				return el.Chain1D(
-					self.w,
-					interaction_range=electrode_dict["interaction_range"],
-					interact_potential=electrode_dict["interact_potential"],
-     				atom_type=electrode_dict["atom_type"],
-					lattice_constant=electrode_dict["lattice_constant"],
-     				k_el_x=electrode_dict["k_el_x"],
-					k_coupl_x=electrode_dict["k_coupl_x"]
-				)
-			
-			case "Ribbon2D":
-				return el.Ribbon2D(
-					self.w,
-					interaction_range=electrode_dict["interaction_range"],
-					interact_potential=electrode_dict["interact_potential"],
-					atom_type=electrode_dict["atom_type"],
-					lattice_constant=electrode_dict["lattice_constant"],
-					N_y=electrode_dict["N_y"],
-					N_y_scatter=self.scatter.N_y,
-					M_E=self.M_E,
-					M_C=self.M_C,
-					k_el_x=electrode_dict["k_el_x"],
-					k_el_y=electrode_dict["k_el_y"],
-					k_el_xy=electrode_dict["k_el_xy"],
-					k_coupl_x=electrode_dict["k_coupl_x"],
-					k_coupl_xy=electrode_dict["k_coupl_xy"],
-					left=electrode_dict["left"],
-					right=electrode_dict["right"],
-					batch_size=self.batch_size,
-					calculate_bandstructure=self.calculate_bandstructure
-				)
-			
-			case "AnalyticalFourier":
-				return el.AnalyticalFourier(
-					self.w,
-					interaction_range=electrode_dict["interaction_range"],
-					interact_potential=electrode_dict["interact_potential"],
-					atom_type=electrode_dict["atom_type"],
-					lattice_constant=electrode_dict["lattice_constant"],
-					N_q=electrode_dict["N_q"],
-					k_el_x=electrode_dict["k_el_x"],
-					k_el_y=electrode_dict["k_el_y"],
-					k_el_xy=electrode_dict["k_el_xy"],
-					k_coupl_x=electrode_dict["k_coupl_x"],
-					k_coupl_xy=electrode_dict["k_coupl_xy"],
-					batch_size=self.batch_size
-				)
-			
-			case "DecimationFourier":
-				return el.DecimationFourier(
-					self.w,
-					N_q=electrode_dict["N_q"],
-					interaction_range=electrode_dict["interaction_range"],
-					interact_potential=electrode_dict["interact_potential"],
-					atom_type=electrode_dict["atom_type"],
-					lattice_constant=electrode_dict["lattice_constant"],
-					N_y=electrode_dict["N_y"],
-					N_y_scatter=self.scatter.N_y,
-					M_E=self.M_E,
-					M_C=self.M_C,
-					k_el_x=electrode_dict["k_el_x"],
-					k_el_y=electrode_dict["k_el_y"],
-					k_el_xy=electrode_dict["k_el_xy"],
-					k_coupl_x=electrode_dict["k_coupl_x"],
-					k_coupl_xy=electrode_dict["k_coupl_xy"],
-					left=electrode_dict["left"],
-					right=electrode_dict["right"],
-					batch_size=self.batch_size,
-					calculate_bandstructure=self.calculate_bandstructure
-				)
-	
-			case _:
-				raise ValueError(f"Unsupported electrode type: {electrode_dict['type']}")
+        Args:
+                electrode_dict (dict): Dictionary containing the electrode configuration.
 
-	def __initialize_scatter(self, scatter_dict, electrode_dict_l, electrode_dict_r) -> object:
-		"""
-		Initializes the scatter object based on the provided configuration.
+        Returns:
+                Electrode (object): Initialized electrode object.
 
-		Args:
-			scatter_dict (dict): Dictionary containing the scatter configuration.
+        Raises:
+                ValueError: If a electrode type is undefined or unsupported.
 
-		Returns:
-			Scatter (object): Initialized scatter object.
+        """
 
-		Raises:
-			ValueError: If scatter type is undefined or unsupported.
+        match electrode_dict["type"]:
+            case "DebyeModel":
+                return el.DebyeModel(
+                    self.w,
+                    k_coupl_x=electrode_dict["k_coupl_x"],
+                    k_coupl_xy=electrode_dict["k_coupl_xy"],
+                    w_D=electrode_dict["E_D"],
+                )
 
-		"""
-		match scatter_dict["type"]:
+            case "Chain1D":
+                return el.Chain1D(
+                    self.w,
+                    interaction_range=electrode_dict["interaction_range"],
+                    interact_potential=electrode_dict["interact_potential"],
+                    atom_type=electrode_dict["atom_type"],
+                    lattice_constant=electrode_dict["lattice_constant"],
+                    k_el_x=electrode_dict["k_el_x"],
+                    k_coupl_x=electrode_dict["k_coupl_x"],
+                )
 
-			case "FiniteLattice2D":
-				return FiniteLattice2D(
-					N_y=scatter_dict["N_y"],
-					N_x=scatter_dict["N_x"],
-					N_y_el_L=electrode_dict_l["N_y"],
-					N_y_el_R=electrode_dict_r["N_y"],
-					k_coupl_x_l=electrode_dict_l["k_coupl_x"],
-					k_c_x=scatter_dict["k_c_x"],
-					k_coupl_x_r=electrode_dict_r["k_coupl_x"],
-					k_c_y=scatter_dict["k_c_y"],
-					k_c_xy=scatter_dict["k_c_xy"],
-					k_coupl_xy_l=electrode_dict_l["k_coupl_xy"],
-					k_coupl_xy_r=electrode_dict_r["k_coupl_xy"],
-					interact_potential=scatter_dict["interact_potential"],
-					interaction_range=scatter_dict["interaction_range"],
-					lattice_constant=scatter_dict["lattice_constant"],
-					atom_type=scatter_dict["atom_type"]
-				)
-    
-			case "Chain1D":
+            case "Ribbon2D":
+                return el.Ribbon2D(
+                    self.w,
+                    interaction_range=electrode_dict["interaction_range"],
+                    interact_potential=electrode_dict["interact_potential"],
+                    atom_type=electrode_dict["atom_type"],
+                    lattice_constant=electrode_dict["lattice_constant"],
+                    N_y=electrode_dict["N_y"],
+                    N_y_scatter=self.scatter.N_y,
+                    M_E=self.M_E,
+                    M_C=self.M_C,
+                    k_el_x=electrode_dict["k_el_x"],
+                    k_el_y=electrode_dict["k_el_y"],
+                    k_el_xy=electrode_dict["k_el_xy"],
+                    k_coupl_x=electrode_dict["k_coupl_x"],
+                    k_coupl_xy=electrode_dict["k_coupl_xy"],
+                    left=electrode_dict["left"],
+                    right=electrode_dict["right"],
+                    batch_size=self.batch_size,
+                    calculate_bandstructure=self.calculate_bandstructure,
+                )
 
-				if not (electrode_dict_l['type'] == 'DebyeModel' and electrode_dict_r['type'] == 'DebyeModel'):
+            case "AnalyticalFourier":
+                return el.AnalyticalFourier(
+                    self.w,
+                    interaction_range=electrode_dict["interaction_range"],
+                    interact_potential=electrode_dict["interact_potential"],
+                    atom_type=electrode_dict["atom_type"],
+                    lattice_constant=electrode_dict["lattice_constant"],
+                    N_q=electrode_dict["N_q"],
+                    k_el_x=electrode_dict["k_el_x"],
+                    k_el_y=electrode_dict["k_el_y"],
+                    k_el_xy=electrode_dict["k_el_xy"],
+                    k_coupl_x=electrode_dict["k_coupl_x"],
+                    k_coupl_xy=electrode_dict["k_coupl_xy"],
+                    batch_size=self.batch_size,
+                )
 
-					return Chain1D(
-						k_c_x=scatter_dict["k_c_x"],
-						k_coupl_x_l=electrode_dict_l["k_el_x"],
-						k_coupl_x_r=electrode_dict_r["k_el_x"],
-						interact_potential=scatter_dict["interact_potential"],
-						interaction_range=scatter_dict["interaction_range"],
-						lattice_constant=scatter_dict["lattice_constant"],
-						atom_type=scatter_dict["atom_type"],
-						N=scatter_dict["N"]
-					)
-				
-				else:
-					return Chain1D(
-						k_c_x=scatter_dict["k_c_x"],
-						k_coupl_x_l=electrode_dict_l["k_coupl_x"],
-						k_coupl_x_r=electrode_dict_r["k_coupl_x"],
-						interact_potential=scatter_dict["interact_potential"],
-						interaction_range=scatter_dict["interaction_range"],
-						lattice_constant=scatter_dict["lattice_constant"],
-						atom_type=scatter_dict["atom_type"],
-						N=scatter_dict["N"]
-					)
-			
-			case _:
-				raise ValueError(f"Unsupported scatter type: {scatter_dict['type']}")
+            case "DecimationFourier":
+                return el.DecimationFourier(
+                    self.w,
+                    N_q=electrode_dict["N_q"],
+                    interaction_range=electrode_dict["interaction_range"],
+                    interact_potential=electrode_dict["interact_potential"],
+                    atom_type=electrode_dict["atom_type"],
+                    lattice_constant=electrode_dict["lattice_constant"],
+                    N_y=electrode_dict["N_y"],
+                    N_y_scatter=self.scatter.N_y,
+                    M_E=self.M_E,
+                    M_C=self.M_C,
+                    k_el_x=electrode_dict["k_el_x"],
+                    k_el_y=electrode_dict["k_el_y"],
+                    k_el_xy=electrode_dict["k_el_xy"],
+                    k_coupl_x=electrode_dict["k_coupl_x"],
+                    k_coupl_xy=electrode_dict["k_coupl_xy"],
+                    left=electrode_dict["left"],
+                    right=electrode_dict["right"],
+                    batch_size=self.batch_size,
+                    calculate_bandstructure=self.calculate_bandstructure,
+                )
 
-	def calculate_sigma(self) -> tuple[np.ndarray, np.ndarray]:
-		"""
-		Calculate self-energies for the left (L) and right (R) electrodes using SigmaCalculator service.
+            case _:
+                raise ValueError(
+                    f"Unsupported electrode type: {electrode_dict['type']}"
+                )
 
-		Returns:
-			tuple: (sigma_L, sigma_R) - Self-energies for left and right electrodes
-		"""
-		sigma_calculator = SigmaCalculator(
-			self.electrode_L,
-			self.electrode_R,
-			self.scatter,
-			self.electrode_dict_L,
-			self.electrode_dict_R,
-			self.w,
-			self.N,
-			self.batch_size
-		)
-		
-		return sigma_calculator.calculate()
+    def __initialize_scatter(
+        self, scatter_dict, electrode_dict_l, electrode_dict_r
+    ) -> object:
+        """
+        Initializes the scatter object based on the provided configuration.
 
-	def calculate_G_cc(self) -> tuple[np.ndarray, np.ndarray]:
-		"""
-		Calculate retarded and advanced Green's functions using GreensFunctionCalculator service.
+        Args:
+                scatter_dict (dict): Dictionary containing the scatter configuration.
 
-		Returns:
-			tuple: (g_CC_ret, g_CC_adv) - Retarded and advanced Green's functions
-		"""
-		gf_calculator = GreensFunctionCalculator(
-			self.w,
-			self.D,
-			self.sigma_L,
-			self.sigma_R,
-			self.electrode_dict_L,
-			self.electrode_dict_R,
-			self.electrode_L,
-			self.batch_size
-		)
-		
-		return gf_calculator.calculate()	
+        Returns:
+                Scatter (object): Initialized scatter object.
 
-	def calculate_transmission(self) -> np.ndarray:
-		"""
-		Calculate phonon transmission using TransmissionCalculator service.
+        Raises:
+                ValueError: If scatter type is undefined or unsupported.
 
-		Returns:
-			np.ndarray: Phonon transmission values
-		"""
-		transmission_calculator = TransmissionCalculator(
-			self.w,
-			self.sigma_L,
-			self.sigma_R,
-			self.g_CC_ret,
-			self.g_CC_adv,
-			self.scatter,
-			self.electrode_dict_L,
-			self.electrode_dict_R,
-			self.scatter_dict,
-			self.electrode_L,
-			self.sys_descr,
-			self.data_path,
-			self.batch_size
-		)
-		
-		return transmission_calculator.calculate()
-	
-	def calc_kappa(self) -> np.ndarray:
-		"""
-		Calculates the phonon thermal conductance.
+        """
+        match scatter_dict["type"]:
+            case "FiniteLattice2D":
+                return FiniteLattice2D(
+                    N_y=scatter_dict["N_y"],
+                    N_x=scatter_dict["N_x"],
+                    N_y_el_L=electrode_dict_l["N_y"],
+                    N_y_el_R=electrode_dict_r["N_y"],
+                    k_coupl_x_l=electrode_dict_l["k_coupl_x"],
+                    k_c_x=scatter_dict["k_c_x"],
+                    k_coupl_x_r=electrode_dict_r["k_coupl_x"],
+                    k_c_y=scatter_dict["k_c_y"],
+                    k_c_xy=scatter_dict["k_c_xy"],
+                    k_coupl_xy_l=electrode_dict_l["k_coupl_xy"],
+                    k_coupl_xy_r=electrode_dict_r["k_coupl_xy"],
+                    interact_potential=scatter_dict["interact_potential"],
+                    interaction_range=scatter_dict["interaction_range"],
+                    lattice_constant=scatter_dict["lattice_constant"],
+                    atom_type=scatter_dict["atom_type"],
+                )
 
-		Returns:
-			kappa (np.ndarray): Phonon thermal conductance values for each temperature in self.temperature.
+            case "Chain1D":
+                if not (
+                    electrode_dict_l["type"] == "DebyeModel"
+                    and electrode_dict_r["type"] == "DebyeModel"
+                ):
+                    return Chain1D(
+                        k_c_x=scatter_dict["k_c_x"],
+                        k_coupl_x_l=electrode_dict_l["k_el_x"],
+                        k_coupl_x_r=electrode_dict_r["k_el_x"],
+                        interact_potential=scatter_dict["interact_potential"],
+                        interaction_range=scatter_dict["interaction_range"],
+                        lattice_constant=scatter_dict["lattice_constant"],
+                        atom_type=scatter_dict["atom_type"],
+                        N=scatter_dict["N"],
+                    )
 
-		"""
+                else:
+                    return Chain1D(
+                        k_c_x=scatter_dict["k_c_x"],
+                        k_coupl_x_l=electrode_dict_l["k_coupl_x"],
+                        k_coupl_x_r=electrode_dict_r["k_coupl_x"],
+                        interact_potential=scatter_dict["interact_potential"],
+                        interaction_range=scatter_dict["interaction_range"],
+                        lattice_constant=scatter_dict["lattice_constant"],
+                        atom_type=scatter_dict["atom_type"],
+                        N=scatter_dict["N"],
+                    )
 
-		kappa = list()
-  
-		# w to SI
-		w_kappa = self.w * const.unit2SI
-		E = const.h_bar * w_kappa
+            case _:
+                raise ValueError(f"Unsupported scatter type: {scatter_dict['type']}")
 
-		# joule to hartree
-		E = E / const.har2J
+    def calculate_sigma(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Calculate self-energies for the left (L) and right (R) electrodes using SigmaCalculator service.
 
-		valid_indices = ~np.isnan(self.T)
+        Returns:
+                tuple: (sigma_L, sigma_R) - Self-energies for left and right electrodes
+        """
+        sigma_calculator = SigmaCalculator(
+            self.electrode_L,
+            self.electrode_R,
+            self.scatter,
+            self.electrode_dict_L,
+            self.electrode_dict_R,
+            self.w,
+            self.N,
+            self.batch_size,
+        )
 
-		if False in valid_indices:
-			notespath = os.path.join(self.data_path, "notes.txt")
-			if not os.path.exists(notespath):
-				with open(notespath, "w") as f:
+        return sigma_calculator.calculate()
 
-					try:
-						f.write(f"Invalid data points found in T in file {self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_"
-			  					f"CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kcoupl_x={electrode_dict_L["k_coupl_x"]}_"
-								f"kcoupl_xy={self.electrode_dict_L["k_coupl_xy"]}_KAPPA.dat")
+    def calculate_G_cc(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Calculate retarded and advanced Green's functions using GreensFunctionCalculator service.
 
-					except KeyError as e:
-						f.write(f"Invalid data points found in T in file {self.sys_descr}___PT_elL={self.electrode_dict_L["type"]}_elR={self.electrode_dict_R["type"]}_"
-			  					f"CC={self.scatter_dict["type"]}_intrange={self.electrode_L.interaction_range}_kcoupl_x={electrode_dict_L["k_coupl_x"]}_KAPPA.dat")
-					f.close()
+        Returns:
+                tuple: (g_CC_ret, g_CC_adv) - Retarded and advanced Green's functions
+        """
+        gf_calculator = GreensFunctionCalculator(
+            self.w,
+            self.D,
+            self.sigma_L,
+            self.sigma_R,
+            self.electrode_dict_L,
+            self.electrode_dict_R,
+            self.electrode_L,
+            self.batch_size,
+        )
 
-		valid_T = self.T[valid_indices]
-		valid_E = E[valid_indices]
+        return gf_calculator.calculate()
 
-		for j in range(0, len(self.temperature)):
-			kappa.append(ck.calculate_kappa(valid_T[1:len(valid_T)], valid_E[1:len(valid_E)], self.temperature[j]) * const.har2pJ)
+    def calculate_transmission(self) -> np.ndarray:
+        """
+        Calculate phonon transmission using TransmissionCalculator service.
 
-		return kappa
+        Returns:
+                np.ndarray: Phonon transmission values
+        """
+        transmission_calculator = TransmissionCalculator(
+            self.E,
+            self.w,
+            self.sigma_L,
+            self.sigma_R,
+            self.g_CC_ret,
+            self.g_CC_adv,
+            self.scatter,
+            self.electrode_dict_L,
+            self.electrode_dict_R,
+            self.scatter_dict,
+            self.electrode_L,
+            self.sys_descr,
+            self.data_path,
+            self.batch_size,
+            write_trans_prob_matrices=self.output_options.get(
+                "write_trans_prob_matrices", True
+            ),
+        )
 
-	def plot_transport(self, write_data=True, plot_data=False) -> None:
-		"""
-		Write and plot transport properties using PlotService.
+        return transmission_calculator.calculate()
 
-		Args:
-			write_data (bool): Flag if data write-out is wanted
-			plot_data (bool): Flag if the data shall be plotted
-		"""
-		plot_service = PlotService(
-			self.data_path,
-			self.sys_descr,
-			self.electrode_dict_L,
-			self.electrode_dict_R,
-			self.scatter_dict["type"],
-			self.electrode_L,
-			self.electrode_R,
-			self.g_CC_ret,
-			self.E_D,
-			prop
-		)
-		
-		plot_service.plot_transport(
-			self.w,
-			self.T,
-			self.temperature,
-			self.kappa,
-			write_data=write_data,
-			plot_data=plot_data
-		)
+    def calc_kappa(self) -> np.ndarray:
+        """
+        Calculates the phonon thermal conductance.
 
-	def plot_dos(self, write_data=True, plot_dos=False) -> None:
-		"""
-		Write and plot DOS using PlotService.
+        Returns:
+                kappa (np.ndarray): Phonon thermal conductance values for each temperature in self.temperature.
 
-		Args:
-			write_data (bool): Flag if data write-out is wanted
-			plot_dos (bool): Flag if the DOS-data shall be plotted
-		"""
-		plot_service = PlotService(
-			self.data_path,
-			self.sys_descr,
-			self.electrode_dict_L,
-			self.electrode_dict_R,
-			self.scatter_dict["type"],
-			self.electrode_L,
-			self.electrode_R,
-			self.g_CC_ret,
-			self.E_D,
-			prop
-		)
-		
-		plot_service.plot_dos(
-			self.w,
-			self.electrode_L,
-			self.electrode_R,
-			write_data=write_data,
-			plot_dos=plot_dos
-		)
+        """
 
-	def write_surface_greens_functions(self):
-		"""
-		Write coupled surface Green's functions for both electrodes to npz files.
-		Files will be saved in the 'cpld_sfg' subdirectory of the data path.
-		"""
-		plot_service = PlotService(
-			self.data_path,
-			self.sys_descr,
-			self.electrode_dict_L,
-			self.electrode_dict_R,
-			self.scatter_dict["type"],
-			self.electrode_L,
-			self.electrode_R,
-			self.g_CC_ret,
-			self.E_D,
-			prop
-		)
-		
-		plot_service.write_surface_greens_functions(
-			self.w,
-			self.electrode_L,
-			self.electrode_R,
-			self.g_CC_ret
-		)
+        kappa = list()
 
-	def write_band_structure(self):
-		"""
-		Write band structure data for both electrodes to npz files.
-		Files will be saved in the 'band_structure' subdirectory of the data path.
-		Automatically detects electrode type and writes appropriate format.
-		"""
-		plot_service = PlotService(
-			self.data_path,
-			self.sys_descr,
-			self.electrode_dict_L,
-			self.electrode_dict_R,
-			self.scatter_dict["type"],
-			self.electrode_L,
-			self.electrode_R,
-			self.g_CC_ret,
-			self.E_D,
-			prop
-		)
-		
-		plot_service.write_band_structure()
+        # w to SI
+        w_kappa = self.w * const.unit2SI
+        E = const.h_bar * w_kappa
 
-	
-if __name__ == '__main__':
+        # joule to hartree
+        E = E / const.har2J
 
-    # Load the .json configuration file
+        valid_indices = ~np.isnan(self.T)
+
+        if False in valid_indices:
+            notespath = os.path.join(self.data_path, "notes.txt")
+            if not os.path.exists(notespath):
+                with open(notespath, "w") as f:
+                    try:
+                        f.write(
+                            f"Invalid data points found in T in file {self.sys_descr}___PT_elL={self.electrode_dict_L['type']}_elR={self.electrode_dict_R['type']}_"
+                            f"CC={self.scatter_dict['type']}_intrange={self.electrode_L.interaction_range}_kcoupl_x={electrode_dict_L['k_coupl_x']}_"
+                            f"kcoupl_xy={self.electrode_dict_L['k_coupl_xy']}_KAPPA.dat"
+                        )
+
+                    except KeyError as e:
+                        f.write(
+                            f"Invalid data points found in T in file {self.sys_descr}___PT_elL={self.electrode_dict_L['type']}_elR={self.electrode_dict_R['type']}_"
+                            f"CC={self.scatter_dict['type']}_intrange={self.electrode_L.interaction_range}_kcoupl_x={electrode_dict_L['k_coupl_x']}_KAPPA.dat"
+                        )
+                    f.close()
+
+        valid_T = self.T[valid_indices]
+        valid_E = E[valid_indices]
+
+        for j in range(0, len(self.temperature)):
+            kappa.append(
+                ck.calculate_kappa(
+                    valid_T[1 : len(valid_T)],
+                    valid_E[1 : len(valid_E)],
+                    self.temperature[j],
+                )
+                * const.har2pJ
+            )
+
+        return kappa
+
+    def plot_transport(
+        self,
+        write_trans=True,
+        write_trans_dos=False,
+        write_kappa=False,
+        plot_data=False,
+    ) -> None:
+        """
+        Write and plot transport properties using PlotService.
+
+        Args:
+                write_trans (bool): Write transmission data to trans/
+                write_trans_dos (bool): Write transmission data to trans+dos/
+                write_kappa (bool): Write kappa data to kappa/
+                plot_data (bool): Flag if the data shall be plotted
+        """
+        plot_service = PlotService(
+            self.data_path,
+            self.sys_descr,
+            self.electrode_dict_L,
+            self.electrode_dict_R,
+            self.scatter_dict["type"],
+            self.electrode_L,
+            self.electrode_R,
+            self.g_CC_ret,
+            self.E,
+            prop,
+        )
+
+        plot_service.plot_transport(
+            self.w,
+            self.T,
+            self.kappa,
+            self.temperature,
+            write_trans=write_trans,
+            write_trans_dos=write_trans_dos,
+            write_kappa=write_kappa,
+            plot_data=plot_data,
+        )
+
+    def plot_dos(self, write_data=False, write_trans_dos=False, plot_dos=False) -> None:
+        """
+        Write and plot DOS using PlotService.
+
+        Args:
+                write_data (bool): Write DOS data to dos/
+                write_trans_dos (bool): Write DOS data to trans+dos/
+                plot_dos (bool): Flag if the DOS-data shall be plotted
+        """
+        plot_service = PlotService(
+            self.data_path,
+            self.sys_descr,
+            self.electrode_dict_L,
+            self.electrode_dict_R,
+            self.scatter_dict["type"],
+            self.electrode_L,
+            self.electrode_R,
+            self.g_CC_ret,
+            self.E,
+            prop,
+        )
+
+        plot_service.plot_dos(
+            self.w,
+            self.electrode_L,
+            self.electrode_R,
+            write_data=write_data,
+            write_trans_dos=write_trans_dos,
+            plot_dos=plot_dos,
+        )
+
+    def write_surface_greens_functions(self, write_data=False) -> None:
+        """
+        Write coupled surface Green's functions for both electrodes to npz files.
+        Files will be saved in the 'cpld_sfg' subdirectory of the data path.
+        """
+        plot_service = PlotService(
+            self.data_path,
+            self.sys_descr,
+            self.electrode_dict_L,
+            self.electrode_dict_R,
+            self.scatter_dict["type"],
+            self.electrode_L,
+            self.electrode_R,
+            self.g_CC_ret,
+            self.E,
+            prop,
+        )
+
+        plot_service.write_surface_greens_functions(
+            self.w,
+            self.electrode_L,
+            self.electrode_R,
+            self.g_CC_ret,
+            write_data=write_data,
+        )
+
+    def write_band_structure(self):
+        """
+        Write band structure data for both electrodes to npz files.
+        Files will be saved in the 'band_structure' subdirectory of the data path.
+        Automatically detects electrode type and writes appropriate format.
+        """
+        plot_service = PlotService(
+            self.data_path,
+            self.sys_descr,
+            self.electrode_dict_L,
+            self.electrode_dict_R,
+            self.scatter_dict["type"],
+            self.electrode_L,
+            self.electrode_R,
+            self.g_CC_ret,
+            self.E,
+            prop,
+        )
+
+        plot_service.write_band_structure()
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python src/main.py path/to/config.yaml")
+        sys.exit(1)
+
+    # Load the YAML configuration file
     config_path = sys.argv[1]
 
     try:
-        with open(config_path, 'r') as f:
-             config = json.load(f)
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = yaml.load(f, Loader=PhonoKitLoader)
     except FileNotFoundError:
         print(f"Configuration file '{config_path}' not found.")
         sys.exit(1)
+    except yaml.YAMLError as e:
+        print(f"Failed to parse YAML config '{config_path}': {e}")
+        sys.exit(1)
 
-	# Extract the enabled electrode
+    electrode_dict_L = None
+    electrode_dict_R = None
+
+    data_output_defaults = {
+        "write_trans": True,
+        "write_trans_prob_matrices": True,
+        "write_dos": False,
+        "write_trans_dos": False,
+        "write_kappa": False,
+        "write_greensf": False,
+        "write_bandstructure": False,
+        "plot_transmission": False,
+        "plot_dos": False,
+    }
+
+    user_data_output = dict(config.get("data_output", {}))
+
+    # Backward compatibility for old key names.
+    if (
+        "calculate_bandstructure" in user_data_output
+        and "write_bandstructure" not in user_data_output
+    ):
+        user_data_output["write_bandstructure"] = user_data_output[
+            "calculate_bandstructure"
+        ]
+
+    data_output = {**data_output_defaults, **user_data_output}
+
+    # Extract the enabled electrode
     for electrode in ["ELECTRODE_L", "ELECTRODE_R"]:
         for electrode_type, params in config[electrode].items():
-            if params.get("enabled", False):  # check if enabled is true 
-                
+            if params.get("enabled", False):
                 if electrode == "ELECTRODE_L":
                     electrode_dict_L = params
                     electrode_dict_L["left"] = True
                     electrode_dict_L["right"] = False
                     electrode_dict_L["type"] = electrode_type
-                    
                 elif electrode == "ELECTRODE_R":
                     electrode_dict_R = params
                     electrode_dict_R["left"] = False
@@ -563,13 +676,13 @@ if __name__ == '__main__':
                     electrode_dict_R["type"] = electrode_type
 
     if not (electrode_dict_L and electrode_dict_R):
-        raise ValueError(f"No enabled electrode found in the configuration for {electrode}.")
+        raise ValueError("No enabled electrode found in the configuration.")
 
     # Extract the enabled scatter object
     scatter_dict = None
     if "SCATTER" in config:
         for scatter_type, params in config["SCATTER"].items():
-            if params.get("enabled", False):  # check if enabled is true
+            if params.get("enabled", False):
                 scatter_dict = params
                 scatter_dict["type"] = scatter_type
                 break
@@ -577,39 +690,50 @@ if __name__ == '__main__':
         raise ValueError("No enabled scatter object found in the configuration.")
 
     # General parameters
-    data_path = config["CALCULATION"]["data_path"]
-    sys_descr = config["CALCULATION"]["sys_descr"]
-    E_D = config["CALCULATION"]["E_D"]
-    M_E = config["CALCULATION"]["M_E"]
-    M_C = config["CALCULATION"]["M_C"]
-    N = config["CALCULATION"]["N"]
-    T_min = config["CALCULATION"]["T_min"]
-    T_max = config["CALCULATION"]["T_max"]
-    kappa_grid_points = config["CALCULATION"]["kappa_grid_points"]
+    calc_config = config["CALCULATION"]
+    data_path = calc_config.get("full_output_path", calc_config["data_path"])
+    sys_descr = calc_config["sys_descr"]
+    E = calc_config["E"]
+    M_E = calc_config["M_E"]
+    M_C = calc_config["M_C"]
+    N = calc_config["N"]
+    T_min = calc_config["T_min"]
+    T_max = calc_config["T_max"]
+    kappa_grid_points = calc_config["kappa_grid_points"]
 
     # Initialize PhononTransort class object
     PT = PhononTransport(
-        data_path = data_path,
-        sys_descr = sys_descr,
-        electrode_dict_L = electrode_dict_L,
-		electrode_dict_R = electrode_dict_R,
-        scatter_dict = scatter_dict,
-        E_D = E_D,
-        M_E = M_E,
-        M_C = M_C,
-        N = N,
-        T_min = T_min,
-        T_max = T_max,
-        kappa_grid_points = kappa_grid_points,
-        calculate_bandstructure = config["data_output"].get("calculate_bandstructure", False)
+        data_path=data_path,
+        sys_descr=sys_descr,
+        electrode_dict_L=electrode_dict_L,
+        electrode_dict_R=electrode_dict_R,
+        scatter_dict=scatter_dict,
+        E=E,
+        M_E=M_E,
+        M_C=M_C,
+        N=N,
+        T_min=T_min,
+        T_max=T_max,
+        kappa_grid_points=kappa_grid_points,
+        calculate_bandstructure=data_output["write_bandstructure"],
+        output_options=data_output,
     )
-    
-    PT.plot_transport(plot_data=config["data_output"]["plot_transmission"])
-    PT.plot_dos(plot_dos=config["data_output"]["plot_dos"])
-    PT.write_surface_greens_functions()
-    
+
+    PT.plot_transport(
+        write_trans=data_output["write_trans"],
+        write_trans_dos=data_output["write_trans_dos"],
+        write_kappa=data_output["write_kappa"],
+        plot_data=data_output["plot_transmission"],
+    )
+    PT.plot_dos(
+        write_data=data_output["write_dos"],
+        write_trans_dos=data_output["write_trans_dos"],
+        plot_dos=data_output["plot_dos"],
+    )
+    PT.write_surface_greens_functions(write_data=data_output["write_greensf"])
+
     # Write band structure only if enabled in config
-    if config["data_output"].get("calculate_bandstructure", False):
+    if data_output["write_bandstructure"]:
         PT.write_band_structure()
-	
+
     print("debug")

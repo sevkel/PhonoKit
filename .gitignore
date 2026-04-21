@@ -11,3 +11,7 @@ phonokit.code-workspace
 *.dat 
 *.json
 
+# .NET / C# build artifacts
+**/bin/
+**/obj/
+

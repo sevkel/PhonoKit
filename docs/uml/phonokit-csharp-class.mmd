@@ -1,0 +1,246 @@
+classDiagram
+    direction TB
+
+    class TransportConfig {
+        +string DataPath
+        +string SystemDescription
+        +double[] E
+        +string ME
+        +string MC
+        +int N
+        +double TMin
+        +double TMax
+        +int KappaGridPoints
+        +ConfigNode ElectrodeL
+        +ConfigNode ElectrodeR
+        +ConfigNode Scatter
+        +bool CalculateBandStructure
+        +Load(path) TransportConfig
+    }
+
+    class ConfigNode {
+        +string Type
+        +FromEnabledBlock(block, left, right) ConfigNode
+        +Has(name) bool
+        +Double(name, fallback) double
+        +Int(name, fallback) int
+        +Bool(name, fallback) bool
+        +String(name, fallback) string
+        +Raw() JsonElement
+    }
+
+    class PhononTransport {
+        -TransportConfig _config
+        -double[] _temperature
+        -double[] _w
+        -ModelSystem _scatter
+        -ElectrodeBase _electrodeL
+        -ElectrodeBase _electrodeR
+        +PhononTransport(config)
+        +Run()
+    }
+
+    class ModelSystem {
+        <<abstract>>
+        +string Type
+        +double[,] Hessian
+    }
+
+    class Chain1DScatter {
+        +int N
+        +double[,] Hessian
+    }
+
+    class FiniteLattice2DScatter {
+        +int NX
+        +int NY
+        +int NYElL
+        +int NYElR
+        +double[,] Hessian
+    }
+
+    ModelSystem <|-- Chain1DScatter
+    ModelSystem <|-- FiniteLattice2DScatter
+
+    class ElectrodeBase {
+        <<abstract>>
+        +string Type
+        +double[] W
+        +int InteractionRange
+        +double[] Dos
+        +double[] DosCoupled
+        +double KCouplX
+        +double KCouplXy
+        +double[] QY
+        +Dictionary BandStruct
+    }
+
+    class DebyeModelElectrode
+    class Chain1DElectrode
+    class AnalyticalFourierElectrode
+    class Ribbon2DElectrode
+    class DecimationFourierElectrode
+
+    ElectrodeBase <|-- DebyeModelElectrode
+    ElectrodeBase <|-- Chain1DElectrode
+    ElectrodeBase <|-- AnalyticalFourierElectrode
+    ElectrodeBase <|-- Ribbon2DElectrode
+    ElectrodeBase <|-- DecimationFourierElectrode
+
+    class SigmaResult {
+        +bool IsWQ
+        +Complex[,,] SigmaL3
+        +Complex[,,] SigmaR3
+        +Complex[,,,] SigmaL4
+        +Complex[,,,] SigmaR4
+    }
+
+    class GreensResult {
+        +bool IsWQ
+        +Complex[,,] GRet3
+        +Complex[,,] GAdv3
+        +Complex[,,,] GRet4
+        +Complex[,,,] GAdv4
+    }
+
+    class TransmissionResult {
+        +double[] Tau
+        +Complex[,,] ProbMatrix
+        +double[,] TauWQ
+    }
+
+    class SigmaCalculator {
+        <<static>>
+        +Calculate(electrodeL, electrodeR, scatter, cfgL, cfgR, w, n) SigmaResult
+    }
+
+    class GreensFunctionCalculator {
+        <<static>>
+        +Calculate(w, d, sigma, cfgL, cfgR, electrodeL) GreensResult
+    }
+
+    class TransmissionCalculator {
+        <<static>>
+        +Calculate(e, w, sigma, greens, scatter, cfgL, cfgR, scatterCfg, electrodeL) TransmissionResult
+    }
+
+    class KappaCalculator {
+        <<static>>
+        +CalculateKappaAtTemperature(tauPh, eHartree, temperature) double
+        +CalculateKappaGrid(w, tau, temperatureGrid) double[]
+    }
+
+    class OutputService {
+        +BaseFilename() string
+        +WriteTransport(w, tau, temperature, kappa)
+        +WriteDos(w, ...)
+        +WriteTransmissionMatrices(w, probMatrix, qY, tauWQ)
+        +WriteSurfaceGreens(w, left, right, greens, enabled)
+        +WriteBandStructure(left, right, enabled)
+    }
+
+    class ElectrodeMath {
+        <<static>>
+        +FourierTransform(h01, hnn, h00, kValues, qY, nY)
+        +CalculateBandStructure(hnn, h01, nKx, kxPoints)
+        +Decimation(w, h00, h01, hnn, eps)
+    }
+
+    class MatrixGen {
+        <<static>>
+        +RangedForceConstant(...) IReadOnlyDictionary
+        +BuildHnn(nY, interactionRange, kValues) double[,]
+        +BuildH00(nY, interactionRange, kValues) double[,]
+        +BuildH01(nY, interactionRange, kValues) double[,]
+        +CalcCenterCoupling(nY, nYScatter, interactionRange, kValues) double[,]
+        +CalcDirectInteraction(nYScatter, kValues) double[,]
+    }
+
+    class Numerics {
+        <<static>>
+        +Linspace(start, end, count, endpoint) double[]
+        +Trapz(y, x) double
+        +Mean(data) double
+        +ToComplex(real) Complex[,]
+        +Multiply(a, b) Complex[,]
+        +Invert(a) Complex[,]
+        +ConjugateTranspose(a) Complex[,]
+        +Trace(a) Complex
+        +EigenBand(hK)
+        +HilbertTransform(signal) double[]
+    }
+
+    class Constants {
+        <<static>>
+        +double HBar
+        +double UnitToSi
+        +double HarToJoule
+        +double HarToPW
+        +double MeVToJ
+    }
+
+    class LagrangeMultipliers {
+        <<static>>
+        +Apply(kMatrix, dimension) double[,]
+    }
+
+    class NpzWriter {
+        <<static>>
+        +Write(path, arrays)
+    }
+
+    class NpyWriter {
+        <<static>>
+        +Write(stream, array)
+    }
+
+    PhononTransport --> TransportConfig : uses
+    PhononTransport --> ModelSystem : builds scatter
+    PhononTransport --> ElectrodeBase : builds electrodes
+    PhononTransport --> SigmaCalculator : calculate sigma
+    PhononTransport --> GreensFunctionCalculator : calculate greens
+    PhononTransport --> TransmissionCalculator : calculate transmission
+    PhononTransport --> KappaCalculator : calculate kappa
+    PhononTransport --> OutputService : writes outputs
+
+    TransportConfig --> ConfigNode : contains
+
+    SigmaCalculator --> SigmaResult : returns
+    SigmaCalculator --> ElectrodeBase : input
+    SigmaCalculator --> ModelSystem : input
+    SigmaCalculator --> ConfigNode : input
+    SigmaCalculator --> MatrixGen : uses
+    SigmaCalculator --> Numerics : uses
+
+    GreensFunctionCalculator --> GreensResult : returns
+    GreensFunctionCalculator --> SigmaResult : input
+    GreensFunctionCalculator --> ConfigNode : input
+    GreensFunctionCalculator --> ElectrodeBase : input
+    GreensFunctionCalculator --> Numerics : uses
+
+    TransmissionCalculator --> TransmissionResult : returns
+    TransmissionCalculator --> SigmaResult : input
+    TransmissionCalculator --> GreensResult : input
+    TransmissionCalculator --> ModelSystem : input
+    TransmissionCalculator --> ConfigNode : input
+    TransmissionCalculator --> Numerics : uses
+    TransmissionCalculator --> MatrixGen : uses
+
+    KappaCalculator --> Constants : uses
+    KappaCalculator --> Numerics : uses
+
+    DebyeModelElectrode --> Numerics : uses
+    Chain1DElectrode --> MatrixGen : uses
+    AnalyticalFourierElectrode --> MatrixGen : uses
+    Ribbon2DElectrode --> MatrixGen : uses
+    Ribbon2DElectrode --> ElectrodeMath : uses
+    DecimationFourierElectrode --> MatrixGen : uses
+    DecimationFourierElectrode --> ElectrodeMath : uses
+
+    ElectrodeMath --> Numerics : uses
+
+    OutputService --> ConfigNode : uses
+    OutputService --> ElectrodeBase : uses
+    OutputService --> GreensResult : uses
+    OutputService --> NpzWriter : uses
+    NpzWriter --> NpyWriter : writes npy entries

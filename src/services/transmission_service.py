@@ -23,9 +23,10 @@ class TransmissionCalculator:
     - DecimationFourier transmission with momentum-space integration
     """
     
-    def __init__(self, w, sigma_L, sigma_R, g_CC_ret, g_CC_adv, scatter, 
+    def __init__(self, E, w, sigma_L, sigma_R, g_CC_ret, g_CC_adv, scatter, 
                  electrode_dict_L, electrode_dict_R, scatter_dict, electrode_L=None, 
-                 sys_descr="", data_path="", batch_size=None):
+                 sys_descr="", data_path="", batch_size=None,
+                 write_trans_prob_matrices=True):
         """
         Initialize the transmission calculator.
         
@@ -44,6 +45,7 @@ class TransmissionCalculator:
             data_path (str): Data output path
             batch_size (int, optional): Batch size for parallel processing
         """
+        self.E = E
         self.w = w
         self.sigma_L = sigma_L
         self.sigma_R = sigma_R
@@ -57,6 +59,7 @@ class TransmissionCalculator:
         self.sys_descr = sys_descr
         self.data_path = data_path
         self.batch_size = batch_size
+        self.write_trans_prob_matrices = write_trans_prob_matrices
         self.N = len(w)
         self.i = np.arange(0, self.N, dtype=int)
         self.D = scatter.hessian
@@ -107,7 +110,8 @@ class TransmissionCalculator:
             for i in self.i
         ])
         
-        self._save_transmission_data(trans_prob_matrix)
+        if self.write_trans_prob_matrices:
+            self._save_transmission_data(trans_prob_matrix)
         
         tau_ph = np.array([np.real(np.trace(trans_prob_matrix[i])) for i in self.i])
         
@@ -158,11 +162,12 @@ class TransmissionCalculator:
                 tau_ph_wq[w_idx, q_idx] = tau_val
                 tau_ph_probmat_wq[w_idx, q_idx] = probmat
         
-    
+
         tau_ph = np.mean(tau_ph_wq, axis=1)
         tau_ph_probmat = np.mean(tau_ph_probmat_wq, axis=1)
         
-        self._save_decimation_fourier_data(tau_ph_probmat, tau_ph_wq)
+        if self.write_trans_prob_matrices:
+            self._save_decimation_fourier_data(tau_ph_probmat, tau_ph_wq)
         
         return tau_ph
     
@@ -177,7 +182,8 @@ class TransmissionCalculator:
             for i in self.i
         ])
         
-        self._save_transmission_data(trans_prob_matrix)
+        if self.write_trans_prob_matrices:
+            self._save_transmission_data(trans_prob_matrix)
         
         tau_ph = np.array([np.real(np.trace(trans_prob_matrix[i])) for i in self.i])
         
@@ -211,10 +217,17 @@ class TransmissionCalculator:
     
     def _generate_filename(self, suffix):
         """Generate filename for saving data."""
-        base = (f"{self.sys_descr}___PT_elL={self.electrode_dict_L['type']}_"
-               f"elR={self.electrode_dict_R['type']}_"
-               f"CC={self.scatter_dict['type']}_"
-               f"intrange={self.electrode_L.interaction_range if self.electrode_L else 'N/A'}")
+        
+        ### Long, detailed basename
+
+        #base = (f"{self.sys_descr}_E=[{self.E[0]}, {self.E[1]}]_PT_elL={self.electrode_dict_L['type']}_"
+        #       f"elR={self.electrode_dict_R['type']}_"
+        #       f"CC={self.scatter_dict['type']}_"
+        #       f"intrange={self.electrode_L.interaction_range if self.electrode_L else 'N/A'}")
+
+        ### Short basename
+
+        base = f"{self.sys_descr}"
         
         try:
             base += f"_kcoupl_x={self.electrode_dict_L['k_coupl_x']}"
