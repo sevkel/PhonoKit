@@ -8,13 +8,13 @@ Phononic transmission calculation for different model configurations of electrod
 
 Input is YAML. The main config is [plot/config_dat.yaml](plot/config_dat.yaml).
 
-The `CALCULATION` block supports YAML anchors and `!join` as requested:
+The `CALCULATION` block:
 
 ```yaml
 CALCULATION:
   
-  sys_descr: &descr "3-1y_2x-1_N=7000_[0.001-25]_periodic_Nq=130"
-  data_path: "C:/Users/sevke/Desktop/Dev/MA/phonokit/plot/new_paper_results/periodic"
+  sys_descr: &descr "SystemDescription"
+  data_path: "PathToSave"
 
   full_output_path: !join ["C:/Users/sevke/Desktop/Dev/MA/phonokit/plot/new_paper_results/periodic", *descr]
 
@@ -33,6 +33,136 @@ Behavior in code:
 1. `full_output_path` is used as output directory if present.
 2. Otherwise `data_path` is used.
 3. `!join` is supported by a custom YAML loader in [src/main.py](src/main.py).
+
+Set up the system (example): Left electrode | Scattering region | Right electrode:
+
+```yaml
+ELECTRODE_L:
+  DebyeModel:
+    enabled: false
+    E_D: 80
+    k_coupl_x: 900
+    k_coupl_xy: 0
+  Chain1D:
+    enabled: false
+    k_el_x: 14400
+    k_coupl_x: 14400
+    interaction_range: 1
+    interact_potential: reciproke_squared
+    atom_type: Au
+    lattice_constant: 3.0
+  Ribbon2D:
+    enabled: false
+    N_y: 3
+    k_el_x: 900
+    k_el_y: 900
+    k_el_xy: 90
+    k_coupl_x: 900
+    k_coupl_xy: 90
+    interaction_range: 1
+    interact_potential: reciproke_squared
+    atom_type: Au
+    lattice_constant: 3.0
+  AnalyticalFourier:
+    enabled: false
+    N_q: 50
+    k_el_x: 900
+    k_el_y: 18
+    k_el_xy: 0
+    k_coupl_x: 180
+    k_coupl_xy: 0
+    interaction_range: 1
+    interact_potential: reciproke_squared
+    atom_type: Au
+    lattice_constant: 3.0
+  DecimationFourier:
+    enabled: true
+    N_y: 101
+    N_q: 50
+    k_el_x: 900
+    k_el_y: 900
+    k_el_xy: 90
+    k_coupl_x: 900
+    k_coupl_xy: 90
+    interaction_range: 1
+    interact_potential: reciproke_squared
+    atom_type: Au
+    lattice_constant: 3.0
+
+ELECTRODE_R:
+  DebyeModel:
+    enabled: false
+    E_D: 80
+    k_coupl_x: 900
+    k_coupl_xy: 0
+  Chain1D:
+    enabled: false
+    k_el_x: 14400
+    k_coupl_x: 14400
+    interaction_range: 1
+    interact_potential: reciproke_squared
+    atom_type: Au
+    lattice_constant: 3.0
+  Ribbon2D:
+    enabled: false
+    N_y: 3
+    k_el_x: 900
+    k_el_y: 900
+    k_el_xy: 90
+    k_coupl_x: 900
+    k_coupl_xy: 90
+    interaction_range: 1
+    interact_potential: reciproke_squared
+    atom_type: Au
+    lattice_constant: 3.0
+  AnalyticalFourier:
+    enabled: false
+    N_q: 50
+    k_el_x: 900
+    k_el_y: 18
+    k_el_xy: 0
+    k_coupl_x: 180
+    k_coupl_xy: 0
+    interaction_range: 1
+    interact_potential: reciproke_squared
+    atom_type: Au
+    lattice_constant: 3.0
+  DecimationFourier:
+    enabled: true
+    N_y: 101
+    N_q: 50
+    k_el_x: 900
+    k_el_y: 900
+    k_el_xy: 90
+    k_coupl_x: 900
+    k_coupl_xy: 90
+    interaction_range: 1
+    interact_potential: reciproke_squared
+    atom_type: Au
+    lattice_constant: 3.0
+
+SCATTER:
+  Chain1D:
+    enabled: false
+    N: 2
+    k_c_x: 180
+    lattice_constant: 3.0
+    interaction_range: 1
+    interact_potential: reciproke_squared
+    atom_type: Au
+  FiniteLattice2D:
+    enabled: true
+    N_y: 1
+    N_x: 2
+    k_c_x: 900
+    k_c_y: 900
+    k_c_xy: 90
+    lattice_constant: 3.0
+    interaction_range: 1
+    interact_potential: reciproke_squared
+    atom_type: Au
+```
+
 
 ## Run
 
